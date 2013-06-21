@@ -30,7 +30,7 @@ int main(int argc, char** argv)
 {
     bool passed = true;
     int i;    
-    size_t power = 19;
+    size_t power = 20;
     size_t numkeys = (1 << power) * 4;
 
     printf("initializing two hash tables\n");
@@ -59,6 +59,7 @@ int main(int argc, char** argv)
         }
     }
 
+    printf("failure = %d\n", failure);
 
     printf("looking up keys in the hash table\n");
     for (i = 1; i < numkeys; i++) {

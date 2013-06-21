@@ -119,8 +119,6 @@ int main(int argc, char **argv)
     }
     size_t numkeys = (1 << power) * 4;
 
-    //numkeys = numkeys*0.959;
-
     printf("[bench] power = %zu\n", power);
     printf("[bench] total_keys = %zu  (%.2f M)\n", numkeys, (float) numkeys / MILLION); 
     printf("[bench] key_size = %zu bits\n", sizeof(KeyType) * 8);
@@ -133,10 +131,67 @@ int main(int argc, char **argv)
     size_t ninserted = numkeys;
 
     double ts, td;
+    
+    size_t numkeys_50 = numkeys/2;
+    size_t numkeys_80 = numkeys*0.8;
+    size_t numkeys_90 = numkeys*0.9;
+    size_t numkeys_94 = numkeys*0.94;
 
+    //0-50
     ts = time_now();
+    for (size_t i = 1; i <= numkeys_50; i++) {
+        KeyType key = (KeyType) i;
+        ValType val = (ValType) i * 2 - 1;
+        cuckoo_status st = cuckoo_insert(table, (const char*) &key, (const char*) &val);
+    }
+    td = time_now() - ts;
+    printf("[bench] num_inserted = %zu\n", numkeys_50 );
+    printf("[bench] insert_time = %.2f seconds\n", td );
+    printf("[bench] insert_tput = %.2f MOPS\n", numkeys_50 / td / MILLION);
+    printf("------------------------------\n");
 
-    for (size_t i = 1; i < numkeys; i++) {
+    //50-80
+    ts = time_now();
+    for (size_t i = numkeys_50+1; i <= numkeys_80; i++) {
+        KeyType key = (KeyType) i;
+        ValType val = (ValType) i * 2 - 1;
+        cuckoo_status st = cuckoo_insert(table, (const char*) &key, (const char*) &val);
+    }
+    td = time_now() - ts;
+    printf("[bench] num_inserted = %zu\n", numkeys_80-numkeys_50);
+    printf("[bench] insert_time = %.2f seconds\n", td );
+    printf("[bench] insert_tput = %.2f MOPS\n", (numkeys_80-numkeys_50) / td / MILLION);
+    printf("------------------------------\n");
+
+    //80-90
+    ts = time_now();
+    for (size_t i = numkeys_80+1; i <= numkeys_90; i++) {
+        KeyType key = (KeyType) i;
+        ValType val = (ValType) i * 2 - 1;
+        cuckoo_status st = cuckoo_insert(table, (const char*) &key, (const char*) &val);
+    }
+    td = time_now() - ts;
+    printf("[bench] num_inserted = %zu\n", numkeys_90-numkeys_80 );
+    printf("[bench] insert_time = %.2f seconds\n", td );
+    printf("[bench] insert_tput = %.2f MOPS\n", (numkeys_90-numkeys_80) / td / MILLION);
+    printf("------------------------------\n");
+
+    //90-94
+    ts = time_now();
+    for (size_t i = numkeys_90+1; i <= numkeys_94; i++) {
+        KeyType key = (KeyType) i;
+        ValType val = (ValType) i * 2 - 1;
+        cuckoo_status st = cuckoo_insert(table, (const char*) &key, (const char*) &val);
+    }
+    td = time_now() - ts;
+    printf("[bench] num_inserted = %zu\n", numkeys_94-numkeys_90);
+    printf("[bench] insert_time = %.2f seconds\n", td );
+    printf("[bench] insert_tput = %.2f MOPS\n", (numkeys_94-numkeys_90) / td / MILLION);
+    printf("------------------------------\n");
+
+    //94-
+    ts = time_now();
+    for (size_t i = numkeys_94+1; i <= numkeys; i++) {
         KeyType key = (KeyType) i;
         ValType val = (ValType) i * 2 - 1;
         cuckoo_status st = cuckoo_insert(table, (const char*) &key, (const char*) &val);
@@ -145,12 +200,11 @@ int main(int argc, char **argv)
             break;
         }
     }
-
     td = time_now() - ts;
-
-    printf("[bench] num_inserted = %zu\n", ninserted );
+    printf("[bench] num_inserted = %zu\n", ninserted-numkeys_94);
     printf("[bench] insert_time = %.2f seconds\n", td );
-    printf("[bench] insert_tput = %.2f MOPS\n", ninserted / td / MILLION);
+    printf("[bench] insert_tput = %.2f MOPS\n", (ninserted-numkeys_94) / td / MILLION);
+    printf("------------------------------\n");
 
     cuckoo_report(table);
 

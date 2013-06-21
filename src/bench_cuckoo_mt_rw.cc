@@ -37,6 +37,8 @@ static size_t nt    = 1;
 static size_t power = 20;
 static float  duration = 2.0;
 static cuckoo_hashtable_t* table = NULL;
+bool writing = true;
+
 void usage() {
     printf("./bench_setsep [-p #] [-q # ] [-t #] [-h]\n");
     printf("\t-p: hash power of hash table, default %zu\n", power);
@@ -57,7 +59,7 @@ typedef struct {
     uint32_t junk;
 } thread_param;
 
-void* exec_thread(void* p) {
+void* exec_thread_r(void* p) {
     thread_param* tp = (thread_param*) p;
     tp->time = 0;  
     tp->hits = 0;
@@ -71,7 +73,7 @@ void* exec_thread(void* p) {
     size_t   left  = w; 
     size_t   k     = 0;
 
-    while ((tp->time < duration) && (left > 0)) {
+    while (writing && (left > 0)) {
         size_t step = (left >= 1000000) ? 1000000 : left;
         double ts = time_now();
         for (size_t i = 0; i < step; i++, k++) {
@@ -89,11 +91,36 @@ void* exec_thread(void* p) {
     pthread_exit(NULL);
 }
 
+void* exec_thread_w(void* p) {
+    thread_param* tp = (thread_param*) p;
+    tp->cpu =  sched_getcpu();
+
+    size_t keynum = (1 << power) * 2;
+    size_t ninserted = keynum * 2;
+    double ts = time_now();
+
+    for (size_t i = keynum + 1; i <= keynum*2; i++) {
+        KeyType key = (KeyType) i;
+        ValType val = (ValType) i * 2 - 1;
+        cuckoo_status st = cuckoo_insert(table, (const char*) &key, (const char*) &val);
+        if (st != ok) {
+            ninserted = i;
+            writing = false;
+            break;
+        }
+    }
+    double td = time_now() - ts;
+    ninserted = ninserted - keynum;
+
+    printf("[bench] %d num_inserted = %zu\n", tp->tid, ninserted);
+    printf("[bench] %d insert_time = %.2f seconds\n", tp->tid, td );
+    printf("[bench] %d insert_tput = %.2f MOPS\n", tp->tid, ninserted / td / MILLION);
+
+    pthread_exit(NULL);
+}
+
 int main(int argc, char **argv)
 {
-
-
-
     int ch;
 
     while ((ch = getopt(argc, argv, "p:q:t:d:h")) != -1) {
@@ -117,7 +144,7 @@ int main(int argc, char **argv)
             exit(-1);
         }
     }
-    size_t numkeys = (1 << power) * 4;
+    size_t numkeys = (1 << power) * 2;
 
     //numkeys = numkeys*0.959;
 
@@ -180,16 +207,35 @@ int main(int argc, char **argv)
         CPU_SET(c, &cpuset);
         pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
 #endif
-        int rc = pthread_create(&threads[i],  &attr, exec_thread, (void*) &(tp[i]));
+        int rc = pthread_create(&threads[i],  &attr, exec_thread_r, (void*) &(tp[i]));
         if (rc) {
             perror("error, pthread_create\n");
             exit(-1);
         }
     }
+
+//---- write thread ---
+    int i = nt;
+    tp[i].tid = i;
+    tp[i].queries = queries;
+#ifdef __linux__
+    int c = 2 * i + 1 ; //assign_core(i);
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(c, &cpuset);
+    pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
+#endif
+    int rc = pthread_create(&threads[i],  &attr, exec_thread_w, (void*) &(tp[i]));
+    if (rc) {
+        perror("error, pthread_create\n");
+        exit(-1);
+    }
+//---- write thread ---
+
     double total_tput = 0.0;
     size_t total_puts = 0;
     uint32_t junk = 0;
-    for (int i = 0; i < nt; i++) {
+    for (int i = 0; i <= nt; i++) {
         pthread_join(threads[i], NULL);
         total_tput += tp[i].tput;
         junk ^= tp[i].junk;

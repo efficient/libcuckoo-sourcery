@@ -14,8 +14,6 @@
 #include <assert.h>
 #include <pthread.h>
 
-
-
 #include "config.h"
 #include "cuckoohash_config.h"
 //#include "hash.h"
@@ -31,6 +29,7 @@ typedef enum {
     failure_function_not_supported = 5,
     failure_table_full = 6,
     failure_under_expansion = 7,
+    failure_path_invalid = 8,
 } cuckoo_status;
 
 
