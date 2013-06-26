@@ -3,6 +3,7 @@
 
 
 #define mutex_lock(mutex) while (pthread_mutex_trylock(mutex));
+//#define mutex_lock(mutex) pthread_mutex_lock(mutex);
 
 #define mutex_unlock(mutex) pthread_mutex_unlock(mutex)
 

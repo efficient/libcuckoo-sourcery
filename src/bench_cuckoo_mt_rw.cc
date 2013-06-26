@@ -37,12 +37,12 @@ static size_t nt    = 1;
 static size_t power = 20;
 static float  duration = 2.0;
 static cuckoo_hashtable_t* table = NULL;
+
 bool writing = true;
 
 void usage() {
-    printf("./bench_setsep [-p #] [-q # ] [-t #] [-h]\n");
+    printf("./bench_setsep [-p #] [-t #] [-h]\n");
     printf("\t-p: hash power of hash table, default %zu\n", power);
-    printf("\t-q: number of queries = 2^(arg), default 10\n");
     printf("\t-t: number of threads to benchmark, default %zu\n", nt);
     printf("\t-h: usage\n");
 }
@@ -54,11 +54,43 @@ typedef struct {
     size_t  gets;
     size_t  puts;
     size_t  hits;
-    size_t* queries;
     int cpu;
-    uint32_t junk;
 } thread_param;
 
+
+void* exec_thread_r(void* p) {
+    thread_param* tp = (thread_param*) p;
+    tp->time = 0;  
+    tp->hits = 0;
+    tp->gets = 0;
+    tp->puts = 0;
+    tp->cpu =  sched_getcpu();
+
+    size_t numkeys = (1 << power) * 3.7;
+    double ts = time_now();
+    size_t i = 1;
+    while(writing) {
+        i = i%numkeys + 1;
+        KeyType key = (KeyType) i;
+        ValType  val;
+        cuckoo_status st  = cuckoo_find(table, (const char*) &key, (char*) & val);
+        tp->gets++;
+    }
+    tp->time = time_now() - ts;
+
+    if(writing)
+        printf("-----\n");
+
+    tp->tput = (float) tp->gets / tp->time;
+
+    printf("[bench] %d num_lookup = %zu\n", tp->tid, tp->gets);
+    printf("[bench] %d lookup_time = %.2f seconds\n", tp->tid, tp->time );
+    printf("[bench] %d lookup_tput = %.2f MOPS\n", tp->tid, tp->tput / MILLION);
+
+    pthread_exit(NULL);
+
+}
+/*
 void* exec_thread_r(void* p) {
     thread_param* tp = (thread_param*) p;
     tp->time = 0;  
@@ -80,37 +112,37 @@ void* exec_thread_r(void* p) {
             KeyType key = (KeyType) q[k];
             ValType  val;
             cuckoo_status st  = cuckoo_find(table, (const char*) &key, (char*) & val);
-            tp->junk ^= val;
         }
         tp->time += time_now() - ts;
         left = left - step;
     }
-
+    if(writing)
+        printf("-----\n");
 
     tp->tput = (float) k / tp->time;
     pthread_exit(NULL);
 }
-
+*/
 void* exec_thread_w(void* p) {
     thread_param* tp = (thread_param*) p;
     tp->cpu =  sched_getcpu();
 
-    size_t keynum = (1 << power) * 2;
-    size_t ninserted = keynum * 2;
+    size_t keynum = (1 << power);
+    size_t ninserted = keynum * 3.7;
     double ts = time_now();
 
-    for (size_t i = keynum + 1; i <= keynum*2; i++) {
+    for (size_t i = keynum * 3.7 + 1; i <= keynum * 4; i++) {
         KeyType key = (KeyType) i;
         ValType val = (ValType) i * 2 - 1;
         cuckoo_status st = cuckoo_insert(table, (const char*) &key, (const char*) &val);
         if (st != ok) {
-            ninserted = i;
             writing = false;
+            ninserted = i;
             break;
         }
     }
     double td = time_now() - ts;
-    ninserted = ninserted - keynum;
+    ninserted = ninserted - keynum*3.7;
 
     printf("[bench] %d num_inserted = %zu\n", tp->tid, ninserted);
     printf("[bench] %d insert_time = %.2f seconds\n", tp->tid, td );
@@ -144,7 +176,7 @@ int main(int argc, char **argv)
             exit(-1);
         }
     }
-    size_t numkeys = (1 << power) * 2;
+    size_t numkeys = (1 << power) * 3.7;
 
     //numkeys = numkeys*0.959;
 
@@ -152,6 +184,7 @@ int main(int argc, char **argv)
     printf("[bench] total_keys = %zu  (%.2f M)\n", numkeys, (float) numkeys / MILLION); 
     printf("[bench] key_size = %zu bits\n", sizeof(KeyType) * 8);
     printf("[bench] value_size = %zu bits\n", sizeof(ValType) * 8);
+    printf("------------------------------\n");
 
     table = cuckoo_init(power);
 
@@ -185,11 +218,6 @@ int main(int argc, char **argv)
     //rng.seed(static_cast<unsigned int>(std::time(0));
     rng.seed(123456);
 
-    size_t* queries = new size_t[nq];
-    for (size_t i = 0; i < nq; i++) {
-        queries[i] = rng() % ninserted;
-    }
-
     printf("[bench] looking up keys in the hash table\n");
 
     pthread_t threads[nt];
@@ -199,7 +227,6 @@ int main(int argc, char **argv)
 
     for (int i = 0; i < nt; i++) {
         tp[i].tid = i;
-        tp[i].queries = queries;
 #ifdef __linux__
         int c = 2 * i + 1 ; //assign_core(i);
         cpu_set_t cpuset;
@@ -213,11 +240,10 @@ int main(int argc, char **argv)
             exit(-1);
         }
     }
-
+    
 //---- write thread ---
     int i = nt;
     tp[i].tid = i;
-    tp[i].queries = queries;
 #ifdef __linux__
     int c = 2 * i + 1 ; //assign_core(i);
     cpu_set_t cpuset;
@@ -234,22 +260,9 @@ int main(int argc, char **argv)
 
     double total_tput = 0.0;
     size_t total_puts = 0;
-    uint32_t junk = 0;
     for (int i = 0; i <= nt; i++) {
         pthread_join(threads[i], NULL);
-        total_tput += tp[i].tput;
-        junk ^= tp[i].junk;
-        //if (verbose) 
-        {
-            printf("[thread%d] %.2f sec, cpu %zu, tput %.2f MOPS\n", 
-                   i, tp[i].time, tp[i].cpu, tp[i].tput / MILLION);
-        }
     }
-
-    printf("[bench] num_queries = %zu (%.2f M)\n", nq, (float) nq / MILLION);
-    printf("[bench] lookup_time = %.4lf seconds\n", td);
-    printf("[bench] lookup_tput = %.4lf M items / seconds\n", (double) total_tput / MILLION);
-    printf("[bench] ignore this line %u\n", junk);
 
     return 0;
 }
