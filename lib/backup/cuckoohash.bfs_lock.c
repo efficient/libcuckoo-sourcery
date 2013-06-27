@@ -3,11 +3,11 @@
  * @file   cuckoohash.c
  * @author Bin Fan <binfan@cs.cmu.edu>
  *         Xiaozhou Li <xl@cs.princeton.edu>
- * @date   Thu Jun 20 2013
+ * @date   Mon Feb 25 22:17:04 2013
  *
  * @brief  implementation of single-writer/multi-reader cuckoo hash
  *
- * @note   BFS version
+ * @note   BFS, search for cuckoo path within the lock
  *
  */
 
@@ -25,7 +25,7 @@
 
 /*
  * The max length of the cuckoo path
- * 4^(MAX_BFS_DEPTH) > MAX_CUCKOO_COUNT / 2  
+ * 4^(MAX_BFS_DEPTH) > MAX_CUCKOO_COUNT / 2
  */
 #define MAX_BFS_DEPTH 5
 
@@ -45,6 +45,7 @@ typedef struct {
     ValType vals[bucketsize];
 }  __attribute__((__packed__))
 Bucket;
+
 
 #define reorder_barrier() __asm__ __volatile__("" ::: "memory")
 #define likely(x)     __builtin_expect((x), 1)
@@ -122,7 +123,7 @@ Bucket;
     } while(0)
 
 
-// dga does not thing we need this mfence in end_incr, because
+// dga does not think we need this mfence in end_incr, because
 // the current code will call pthread_mutex_unlock before returning
 // to the caller;  pthread_mutex_unlock is a memory barrier:
 // http://www.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap04.html#tag_04_11
@@ -168,8 +169,8 @@ static inline size_t _alt_index(cuckoo_hashtable_t* h,
     //uint32_t tag = hv & 0xFF;
     uint32_t tag = (hv >> 24) + 1; // ensure tag is nonzero for the multiply
     return (index ^ (tag * 0x5bd1e995)) & hashmask(h->hashpower);
-    //size_t alt = (index ^ (tag * 0x5bd1e995)) & hashmask(h->hashpower);
-    //alt = (alt ^ ((alt == index) * 0x123456)) & hashmask(h->hashpower);
+    //return (hv ^ (tag * 0x5bd1e995)) & hashmask(h->hashpower);
+    //return ((hv >> 32) & hashmask(h->hashpower));
 }
 
 
@@ -206,6 +207,8 @@ static inline bool is_slot_empty(cuckoo_hashtable_t* h,
     }
     return false;
 }
+
+
 
 typedef struct  {
     size_t bucket;
@@ -263,6 +266,7 @@ static b_slot dequeue(queue *q)
     return(x);
 }
 
+
 static bool empty_q(queue *q)
 {
     if (q->count <= 0) return (true);
@@ -302,16 +306,16 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
             size_t bucket_child = bucket_child_next;
             //uint32_t hv = _hashed_key((char*) &TABLE_KEY(h, i, j));
             //size_t bucket_child = _alt_index(h, hv, i);
-            
-            if (k < (bucketsize-1)) { 
+
+            if (k < (bucketsize-1)) {
                 hv_next = _hashed_key((char*) &TABLE_KEY(h, i, ((j+1)%bucketsize)));
                 bucket_child_next = _alt_index(h, hv_next, i);
                 //__builtin_prefetch(&h->buckets[bucket_child_next]);
             }
-            
+
             if(bucket_child == x.parent)
                 continue;
-            
+
             bool duplicated = false;
             for (int m = 0; m < k; m++){
                 if (slot_keys[m] == bucket_child){
@@ -323,10 +327,10 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
             if(duplicated == true){
                 continue;
             }
-                        
+
             b_slot y = {.bucket=bucket_child, .depth=x.depth+1, .parent=x.bucket,\
                         .pathcode = x.pathcode*bucketsize + j};
-            
+
             for (int m = 0; m < bucketsize; m++) {
                 size_t j = (r+m) % bucketsize;
                 if (is_slot_empty(h, bucket_child, j)) {
@@ -413,11 +417,7 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
             return depth;
         }
 
-        if(!is_slot_empty(h, i2, j2)) {
-            return depth;
-        }
-            
-        assert(is_slot_empty(h, i2, j2));
+        //assert(is_slot_empty(h, i2, j2));
 
         start_incr_counter2(h, i1, i2);
 
@@ -434,6 +434,41 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
     return depth;
 
 }
+
+static bool _run_cuckoo(cuckoo_hashtable_t* h,
+                        size_t i1,
+                        size_t i2,
+                        size_t* i) {
+
+    static __thread CuckooRecord* cuckoo_path = NULL;
+    if (!cuckoo_path) {
+        cuckoo_path = malloc(MAX_BFS_DEPTH * sizeof(CuckooRecord));
+        if(!cuckoo_path) {
+            fprintf(stderr, "Failed to init cuckoo path.\n");
+            return -1;
+        }
+    }
+    memset(cuckoo_path, 0, MAX_BFS_DEPTH * sizeof(CuckooRecord));
+
+    while (1) {
+        size_t num_kicks = 0;
+
+        int depth = _cuckoopath_search_bfs(h, cuckoo_path, i1, i2, &num_kicks);
+        if (depth < 0) {
+            break;
+        }
+
+        int curr_depth = _cuckoopath_move(h, cuckoo_path, depth);
+        if (curr_depth == 0) {
+            *i = cuckoo_path[0].bucket;
+            //free(cuckoo_path);
+            return true;
+        }
+    }
+    //free(cuckoo_path);
+    return false;
+}
+
 
 /**
  * @brief Try to read bucket i and check if the given key is there
@@ -459,36 +494,6 @@ static bool _try_read_from_bucket(cuckoo_hashtable_t* h,
 }
 
 /**
- * @brief Try to add key/val to bucket i slot j,
- *
- * @param key Pointer to the key to store
- * @param val Pointer to the value to store
- * @param i Bucket index
- * @param j Slot index
- *
- * @return true on success and false on failure
- */
-static bool _try_add_to_slot(cuckoo_hashtable_t* h,
-                             const char* key,
-                             const char* val,
-                             size_t i,
-                             size_t j) {
-    if (is_slot_empty(h, i, j)) {
-        
-        start_incr_counter(h, i);
-        
-        memcpy(&TABLE_KEY(h, i, j), key, sizeof(KeyType));
-        memcpy(&TABLE_VAL(h, i, j), val, sizeof(ValType));
-        
-        end_incr_counter(h, i);
-        h->hashitems++;
-
-        return true;
-    }
-    return false;
-} 
-
-/**
  * @brief Try to add key/val to bucket i,
  *
  * @param key Pointer to the key to store
@@ -503,7 +508,7 @@ static bool _try_add_to_bucket(cuckoo_hashtable_t* h,
                                size_t i) {
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i, j)) {
-            
+
             start_incr_counter(h, i);
 
             memcpy(&TABLE_KEY(h, i, j), key, sizeof(KeyType));
@@ -516,6 +521,9 @@ static bool _try_add_to_bucket(cuckoo_hashtable_t* h,
     }
     return false;
 }
+
+
+
 
 /**
  * @brief Try to delete key and its corresponding value from bucket i,
@@ -585,6 +593,43 @@ TryRead:
     } else {
         return failure_key_not_found;
     }
+}
+
+static cuckoo_status _cuckoo_insert(cuckoo_hashtable_t* h,
+                                    const char* key,
+                                    const char* val,
+                                    size_t i1,
+                                    size_t i2) {
+
+    /*
+     * try to add new key to bucket i1 first, then try bucket i2
+     */
+    if (_try_add_to_bucket(h, key, val, i1)) {
+        return ok;
+    }
+
+    if (_try_add_to_bucket(h, key, val, i2)) {
+        return ok;
+    }
+
+
+    /*
+     * we are unlucky, so let's perform cuckoo hashing
+     */
+    size_t i = 0;
+            
+    if (_run_cuckoo(h, i1, i2, &i)) {
+        if (_try_add_to_bucket(h, key, val, i)) {
+            return ok;
+        }
+    }
+
+    DBG("hash table is full (hashpower = %zu, hash_items = %zu, load factor = %.2f), need to increase hashpower\n",
+        h->hashpower, h->hashitems, 1.0 * h->hashitems / bucketsize / hashsize(h->hashpower));
+
+
+    return failure_table_full;
+
 }
 
 static cuckoo_status _cuckoo_delete(cuckoo_hashtable_t* h,
@@ -700,6 +745,7 @@ cuckoo_status cuckoo_find(cuckoo_hashtable_t* h,
 cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
                             const char *key,
                             const char* val) {
+    mutex_lock(&h->lock);
 
     uint32_t hv = _hashed_key(key);
     size_t i1   = _index_hash(h, hv);
@@ -708,81 +754,21 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     ValType oldval;
     cuckoo_status st = _cuckoo_find(h, key, (char*) &oldval, i1, i2);
     if  (st == ok) {
-        printf("key duplicated %s\n");
+        mutex_unlock(&h->lock);
         return failure_key_duplicated;
     }
-    
-    for (size_t j = 0; j < bucketsize; j++) {
-        if (is_slot_empty(h, i1, j)) {
-            mutex_lock(&h->lock);
-            if(_try_add_to_slot(h,key,val,i1,j)){
-                if (h->expanding) {
-                    _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
-                }
-                mutex_unlock(&h->lock);
-                return ok;
-            }
-            mutex_unlock(&h->lock);
-            break;
-        }
-    }    
-    for (size_t j = 0; j < bucketsize; j++) {
-        if (is_slot_empty(h, i2, j)) {
-            mutex_lock(&h->lock);
-            if(_try_add_to_slot(h,key,val,i2,j)){
-                if (h->expanding) {
-                    _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
-                }
-                mutex_unlock(&h->lock);
-                return ok;
-            }
-            mutex_unlock(&h->lock);
-            break;
-        }
-    }
-    
-    static __thread CuckooRecord* cuckoo_path = NULL;
-    if (!cuckoo_path) { 
-        cuckoo_path = malloc(MAX_BFS_DEPTH * sizeof(CuckooRecord));
-        if (!cuckoo_path) {
-            fprintf(stderr, "Failed to init cuckoo path.\n");
-            return failure;
-        }
-    }
-    memset(cuckoo_path, 0, MAX_BFS_DEPTH * sizeof(CuckooRecord));
 
-    while(1){
-        size_t num_kicks = 0;
-        int depth = _cuckoopath_search_bfs(h, cuckoo_path, i1, i2, &num_kicks);
+    st = _cuckoo_insert(h, key, val, i1, i2);
 
-        if (depth < 0) {
-            break;
-        }
-        mutex_lock(&h->lock);
-        int curr_depth = _cuckoopath_move(h, cuckoo_path, depth);
-        if (curr_depth == 0) {
-            //printf("cuckoo path length: %d\n", depth);
-            size_t i = cuckoo_path[0].bucket;
-            if (_try_add_to_bucket(h, key, val, i)) {
-                st = ok;
-            }
-            if (h->expanding) {
-                //
-                // still some work to do before releasing the lock
-                //
-                _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
-            }
-            mutex_unlock(&h->lock);    
-            break;
-        }
-        mutex_unlock(&h->lock);    
+    if (h->expanding) {
+        //
+        // still some work to do before releasing the lock
+        //
+        _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
     }
-    if(st != ok) {      
-        DBG("hash table is full, need to increase hashpower \
-             (hashpower = %zu, hash_items = %zu, load factor = %.2f)\n",
-            h->hashpower, h->hashitems, cuckoo_loadfactor(h));
-        st = failure_table_full;
-    }
+
+    mutex_unlock(&h->lock);
+
     return st;
 }
 
@@ -825,6 +811,7 @@ cuckoo_status cuckoo_expand(cuckoo_hashtable_t* h) {
     memcpy(new_buckets, h->buckets, tablesize(h));
     memcpy(new_buckets + tablesize(h), h->buckets, tablesize(h));
 
+
     h->buckets = new_buckets;
     h->hashpower++;
     h->cleaned_buckets = 0;
@@ -842,8 +829,7 @@ cuckoo_status cuckoo_expand(cuckoo_hashtable_t* h) {
 void cuckoo_report(cuckoo_hashtable_t* h) {
 
     DBG("total number of items %zu\n", h->hashitems);
-    DBG("total size %zu Bytes, or %.2f MB\n", \
-        tablesize(h), (float) tablesize(h) / (1 <<20));
+    DBG("total size %zu Bytes, or %.2f MB\n", tablesize(h), (float) tablesize(h) / (1 <<20));
     DBG("load factor %.4f\n", 1.0 * h->hashitems / bucketsize / hashsize(h->hashpower));
 }
 
