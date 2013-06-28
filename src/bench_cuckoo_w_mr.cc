@@ -1,4 +1,11 @@
 /* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/**
+ * @file   bench_cuckoo_w_mr.cc
+ *
+ * @brief  throughput benchmark: concurrent single writer multiple readers.
+ *
+ */
+
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
@@ -90,39 +97,7 @@ void* exec_thread_r(void* p) {
     pthread_exit(NULL);
 
 }
-/*
-void* exec_thread_r(void* p) {
-    thread_param* tp = (thread_param*) p;
-    tp->time = 0;  
-    tp->hits = 0;
-    tp->gets = 0;
-    tp->puts = 0;
-    tp->cpu =  sched_getcpu();
 
-    size_t   w     = nq / nt;
-    size_t*  q     = tp->queries + w * tp->tid;
-    size_t   total = 0;
-    size_t   left  = w; 
-    size_t   k     = 0;
-
-    while (writing && (left > 0)) {
-        size_t step = (left >= 1000000) ? 1000000 : left;
-        double ts = time_now();
-        for (size_t i = 0; i < step; i++, k++) {
-            KeyType key = (KeyType) q[k];
-            ValType  val;
-            cuckoo_status st  = cuckoo_find(table, (const char*) &key, (char*) & val);
-        }
-        tp->time += time_now() - ts;
-        left = left - step;
-    }
-    if(writing)
-        printf("-----\n");
-
-    tp->tput = (float) k / tp->time;
-    pthread_exit(NULL);
-}
-*/
 void* exec_thread_w(void* p) {
     thread_param* tp = (thread_param*) p;
     tp->cpu =  sched_getcpu();

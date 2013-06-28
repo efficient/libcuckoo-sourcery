@@ -778,8 +778,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
         mutex_unlock(&h->lock);    
     }
     if(st != ok) {      
-        DBG("hash table is full, need to increase hashpower \
-             (hashpower = %zu, hash_items = %zu, load factor = %.2f)\n",
+        DBG("hash table is full (hashpower = %zu, hash_items = %zu, load factor = %.2f), need to increase hashpower\n",
             h->hashpower, h->hashitems, cuckoo_loadfactor(h));
         st = failure_table_full;
     }

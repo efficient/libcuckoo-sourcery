@@ -1,12 +1,9 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /**
  * @file   test_cuckoo_path.c
- * @author Bin Fan <binfan@cs.cmu.edu>
- * @date   Thu Feb 28 15:54:47 2013
  * 
- * @brief  a simple example of using cuckoo hash table
- * 
- * 
+ * @brief  a script to print cuckoo path length
+ *  
  */
 #ifdef HAVE_CONFIG_H
 #  include "config.h"

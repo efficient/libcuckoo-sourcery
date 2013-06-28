@@ -1,4 +1,11 @@
 /* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/**
+ * @file   bench_cuckoo.cc
+ *
+ * @brief  throughput benchmark: first single writer, then multiple readers. 
+ *
+ */
+
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
