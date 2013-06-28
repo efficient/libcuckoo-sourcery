@@ -18,7 +18,7 @@ while 1:
         length = int(line.split(': ')[1])
         path_len.append(length)
 
-keynum = 4194304
+keynum = pow(2,20)*4
 
 pLen = []
 for i in range(0,5):

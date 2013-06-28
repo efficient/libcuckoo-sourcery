@@ -602,6 +602,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
                     _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
                 }
                 mutex_unlock(&h->lock);
+                //printf("cuckoo path length: 0\n");
                 return ok;
             }
             mutex_unlock(&h->lock);
@@ -616,6 +617,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
                     _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
                 }
                 mutex_unlock(&h->lock);
+                //printf("cuckoo path length: 0\n");
                 return ok;
             }
             mutex_unlock(&h->lock);
