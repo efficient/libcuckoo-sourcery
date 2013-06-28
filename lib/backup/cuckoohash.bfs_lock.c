@@ -208,8 +208,6 @@ static inline bool is_slot_empty(cuckoo_hashtable_t* h,
     return false;
 }
 
-
-
 typedef struct  {
     size_t bucket;
     size_t slot;
@@ -230,7 +228,7 @@ typedef struct {
     b_slot slots[MAX_CUCKOO_COUNT+1];
     int first;
     int last;
-    int count;
+    //int count;
 } __attribute__((__packed__))
 queue;
 
@@ -238,40 +236,40 @@ void init_queue(queue *q)
 {
     q->first = 0;
     q->last = MAX_CUCKOO_COUNT-1;
-    q->count = 0;
+    //q->count = 0;
 }
 
 static void enqueue(queue *q, b_slot x)
 {
-    if (q->count >= MAX_CUCKOO_COUNT)
-        printf("Warning: queue overflow enqueue x=%d\n",x.bucket);
-    else {
-        q->last = (q->last+1) % MAX_CUCKOO_COUNT;
-        q->slots[ q->last ] = x;
-        q->count = q->count + 1;
-    }
+    //if (q->count >= MAX_CUCKOO_COUNT)
+    //    printf("Warning: queue overflow enqueue x=%d\n",x.bucket);
+    //else {
+    q->last = (q->last+1) % MAX_CUCKOO_COUNT;
+    q->slots[ q->last ] = x;
+    //q->count = q->count + 1;
+    //}
 }
 
 static b_slot dequeue(queue *q)
 {
-    b_slot x;
-
-    if (q->count <= 0) printf("Warning: empty queue dequeue.\n");
-    else {
-        x = q->slots[ q->first ];
-        q->first = (q->first+1) % MAX_CUCKOO_COUNT;
-        q->count = q->count - 1;
-    }
+    //b_slot x;
+    //if (q->count <= 0) printf("Warning: empty queue dequeue.\n");
+    //else {
+    b_slot x = q->slots[ q->first ];
+    q->first = (q->first+1) % MAX_CUCKOO_COUNT;
+    //q->count = q->count - 1;
+    //}
 
     return(x);
 }
 
-
+/*
 static bool empty_q(queue *q)
 {
     if (q->count <= 0) return (true);
     else return (false);
 }
+*/
 
 // --- end of queue functions ---
 
@@ -287,9 +285,7 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
     b_slot x2 = {.bucket=i2, .depth=0, .pathcode=2, .parent=i1};
     enqueue(&bucket_q, x2);
 
-    while ((*num_kicks < MAX_CUCKOO_COUNT) &&
-           empty_q(&bucket_q) == false) {
-
+    while ((*num_kicks < MAX_CUCKOO_COUNT)) { //&& empty_q(&bucket_q) == false
         b_slot x = dequeue(&bucket_q);
         size_t i = x.bucket;
 

@@ -227,7 +227,7 @@ typedef struct {
     b_slot slots[MAX_CUCKOO_COUNT+1];
     int first;
     int last;
-    int count;
+    //int count;
 } __attribute__((__packed__))
 queue;
 
@@ -235,39 +235,39 @@ void init_queue(queue *q)
 {
     q->first = 0;
     q->last = MAX_CUCKOO_COUNT-1;
-    q->count = 0;
+    //q->count = 0;
 }
 
 static void enqueue(queue *q, b_slot x)
 {
-    if (q->count >= MAX_CUCKOO_COUNT)
-        printf("Warning: queue overflow enqueue x=%d\n",x.bucket);
-    else {
-        q->last = (q->last+1) % MAX_CUCKOO_COUNT;
-        q->slots[ q->last ] = x;
-        q->count = q->count + 1;
-    }
+    //if (q->count >= MAX_CUCKOO_COUNT)
+    //    printf("Warning: queue overflow enqueue x=%d\n",x.bucket);
+    //else {
+    q->last = (q->last+1) % MAX_CUCKOO_COUNT;
+    q->slots[ q->last ] = x;
+    //q->count = q->count + 1;
+    //}
 }
 
 static b_slot dequeue(queue *q)
 {
-    b_slot x;
-
-    if (q->count <= 0) printf("Warning: empty queue dequeue.\n");
-    else {
-        x = q->slots[ q->first ];
-        q->first = (q->first+1) % MAX_CUCKOO_COUNT;
-        q->count = q->count - 1;
-    }
-
+    //b_slot x;
+    //if (q->count <= 0) printf("Warning: empty queue dequeue.\n");
+    //else {
+    b_slot x = q->slots[ q->first ];
+    q->first = (q->first+1) % MAX_CUCKOO_COUNT;
+    //q->count = q->count - 1;
+    //}
     return(x);
 }
 
+/*
 static bool empty_q(queue *q)
 {
     if (q->count <= 0) return (true);
     else return (false);
 }
+*/
 
 // --- end of queue functions ---
 
@@ -283,9 +283,7 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
     b_slot x2 = {.bucket=i2, .depth=0, .pathcode=2, .parent=i1};
     enqueue(&bucket_q, x2);
 
-    while ((*num_kicks < MAX_CUCKOO_COUNT) &&
-           empty_q(&bucket_q) == false) {
-
+    while ((*num_kicks < MAX_CUCKOO_COUNT)) { //&& empty_q(&bucket_q)==false 
         b_slot x = dequeue(&bucket_q);
         size_t i = x.bucket;
 
@@ -302,7 +300,7 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
             size_t bucket_child = bucket_child_next;
             //uint32_t hv = _hashed_key((char*) &TABLE_KEY(h, i, j));
             //size_t bucket_child = _alt_index(h, hv, i);
-            
+             
             if (k < (bucketsize-1)) { 
                 hv_next = _hashed_key((char*) &TABLE_KEY(h, i, ((j+1)%bucketsize)));
                 bucket_child_next = _alt_index(h, hv_next, i);
@@ -320,20 +318,20 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
                 }
             }
             slot_keys[k] = bucket_child;
-            if(duplicated == true){
+            if(duplicated == true)
                 continue;
-            }
                         
             b_slot y = {.bucket=bucket_child, .depth=x.depth+1, .parent=x.bucket,\
-                        .pathcode = x.pathcode*bucketsize + j};
+                        .pathcode = x.pathcode * bucketsize + j};
             
             for (int m = 0; m < bucketsize; m++) {
                 size_t j = (r+m) % bucketsize;
                 if (is_slot_empty(h, bucket_child, j)) {
-                    y.pathcode = y.pathcode*bucketsize + j;
+                    y.pathcode = y.pathcode * bucketsize + j;
                     return y;
                 }
             }
+
             enqueue(&bucket_q, y);
             *num_kicks += 1;
         }
@@ -351,7 +349,7 @@ static int _cuckoopath_search_bfs(cuckoo_hashtable_t* h,
     b_slot x = _slot_search_bfs(h, i1, i2, num_kicks);
 
     if (x.depth >= 0) {
-        int path[MAX_BFS_DEPTH];
+        int path[MAX_BFS_DEPTH + 1];
         int num = x.pathcode;
         for(int d=0; d<=x.depth+1; d++){
             path[x.depth-d+1] = num % bucketsize;
