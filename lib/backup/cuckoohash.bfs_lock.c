@@ -448,7 +448,7 @@ static bool _run_cuckoo(cuckoo_hashtable_t* h,
             return -1;
         }
     }
-    memset(cuckoo_path, 0, MAX_BFS_DEPTH * sizeof(CuckooRecord));
+    //memset(cuckoo_path, 0, MAX_BFS_DEPTH * sizeof(CuckooRecord));
 
     while (1) {
         size_t num_kicks = 0;

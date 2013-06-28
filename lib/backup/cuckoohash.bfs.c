@@ -749,7 +749,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
             return failure;
         }
     }
-    memset(cuckoo_path, 0, MAX_BFS_DEPTH * sizeof(CuckooRecord));
+    //memset(cuckoo_path, 0, MAX_BFS_DEPTH * sizeof(CuckooRecord));
 
     while(1){
         size_t num_kicks = 0;

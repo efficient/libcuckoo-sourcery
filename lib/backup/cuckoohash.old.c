@@ -331,7 +331,7 @@ static bool _run_cuckoo(cuckoo_hashtable_t* h,
             return -1;
         }
     }
-    memset(cuckoo_path, 0, MAX_CUCKOO_COUNT * sizeof(CuckooRecord));
+    //memset(cuckoo_path, 0, MAX_CUCKOO_COUNT * sizeof(CuckooRecord));
 
     for (size_t idx = 0; idx < NUM_CUCKOO_PATH; idx++) {
         if (idx < NUM_CUCKOO_PATH / 2) {
