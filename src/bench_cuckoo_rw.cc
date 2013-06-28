@@ -109,7 +109,7 @@ void* exec_thread(void* p) {
             i_w++;
         }
         else {
-            i_r = (i_r + 1) % numkeys_read ;
+            i_r = (i_r + 1) % numkeys_read;
             KeyType key = (KeyType) (i_r + numkeys_read_start);
             ValType val;
             cuckoo_status st  = cuckoo_find(table, (const char*) &key, (char*) & val);
@@ -155,7 +155,7 @@ int main(int argc, char **argv)
     size_t numkeys = totalkeys * load_factor[0];
 
     printf("[bench] power = %zu\n", power);
-    printf("[bench] total_keys = %zu  (%.2f M)\n", totalkeys, (float) numkeys / MILLION); 
+    printf("[bench] total_keys = %zu  (%.2f M)\n", totalkeys, (float) totalkeys / MILLION); 
     printf("[bench] key_size = %zu bits\n", sizeof(KeyType) * 8);
     printf("[bench] value_size = %zu bits\n", sizeof(ValType) * 8);
     printf("------------------------------\n");
@@ -233,7 +233,6 @@ int main(int argc, char **argv)
         }
         
         double total_tput = 0.0;
-        size_t total_puts = 0;
         for (int i = 0; i < nt; i++) {
             pthread_join(threads[i], NULL);
             total_tput += tp[i].tput;

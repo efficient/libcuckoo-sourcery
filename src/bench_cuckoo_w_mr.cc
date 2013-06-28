@@ -39,18 +39,18 @@ double time_now()
     return (double)tv.tv_sec + (double)tv.tv_usec / MILLION;
 }
 
-static size_t nq    = 1024; 
 static size_t nt    = 1;
 static size_t power = 20;
-static float  duration = 2.0;
+static size_t nr = 1 << 25;
 static cuckoo_hashtable_t* table = NULL;
 
 bool writing = true;
+static double load_factor[6] = {0.2, 0.5, 0.8, 0.9, 0.94, 1};
 
 void usage() {
     printf("./bench_setsep [-p #] [-t #] [-h]\n");
     printf("\t-p: hash power of hash table, default %zu\n", power);
-    printf("\t-t: number of threads to benchmark, default %zu\n", nt);
+    printf("\t-t: number of read threads to benchmark, default %zu\n", nt);
     printf("\t-h: usage\n");
 }
 
@@ -60,7 +60,8 @@ typedef struct {
     double  tput;
     size_t  gets;
     size_t  puts;
-    size_t  hits;
+    double  load_start;
+    double  load_end;
     int cpu;
 } thread_param;
 
@@ -68,26 +69,27 @@ typedef struct {
 void* exec_thread_r(void* p) {
     thread_param* tp = (thread_param*) p;
     tp->time = 0;  
-    tp->hits = 0;
     tp->gets = 0;
-    tp->puts = 0;
     tp->cpu =  sched_getcpu();
 
-    size_t numkeys = (1 << power) * 3.7;
+    size_t numkeys_inserted = (1 << power) * 4 * tp->load_start;
+    size_t numkeys_read = numkeys_inserted / nt;
+    size_t numkeys_read_start = numkeys_read * tp->tid + 1;
+    size_t numkeys_read_end = numkeys_read * (tp->tid + 1);
+
+    std::mt19937_64 rng;
+    rng.seed(123456);
+    size_t i_r = rng() % numkeys_read;
     double ts = time_now();
-    size_t i = 1;
+
     while(writing) {
-        i = i%numkeys + 1;
-        KeyType key = (KeyType) i;
+        i_r = (i_r + 1) % numkeys_read;
+        KeyType key = (KeyType) (i_r + numkeys_read_start);
         ValType  val;
         cuckoo_status st  = cuckoo_find(table, (const char*) &key, (char*) & val);
         tp->gets++;
     }
     tp->time = time_now() - ts;
-
-    if(writing)
-        printf("-----\n");
-
     tp->tput = (float) tp->gets / tp->time;
 
     printf("[bench] %d num_lookup = %zu\n", tp->tid, tp->gets);
@@ -100,28 +102,34 @@ void* exec_thread_r(void* p) {
 
 void* exec_thread_w(void* p) {
     thread_param* tp = (thread_param*) p;
+    tp->time = 0;
+    tp->puts = 0;
     tp->cpu =  sched_getcpu();
 
-    size_t keynum = (1 << power);
-    size_t ninserted = keynum * 3.7;
+    size_t numkeys_inserted = (1 << power) * 4 * tp->load_start;
+    size_t numkeys_write_start = numkeys_inserted + 1;
+    size_t numkeys_write_end =  (1 << power) * 4 * tp->load_end;
+
+    size_t i_w = numkeys_write_start;
     double ts = time_now();
 
-    for (size_t i = keynum * 3.7 + 1; i <= keynum * 4; i++) {
-        KeyType key = (KeyType) i;
-        ValType val = (ValType) i * 2 - 1;
+    while(i_w <= numkeys_write_end) {
+        KeyType key = (KeyType) i_w;
+        ValType val = (ValType) i_w * 2 - 1;
         cuckoo_status st = cuckoo_insert(table, (const char*) &key, (const char*) &val);
         if (st != ok) {
-            writing = false;
-            ninserted = i;
             break;
         }
+        tp->puts++;
+        i_w++;
     }
-    double td = time_now() - ts;
-    ninserted = ninserted - keynum*3.7;
+    tp->time = time_now() - ts;
+    tp->tput = (float) tp->puts / tp->time;
+    writing = false;
 
-    printf("[bench] %d num_inserted = %zu\n", tp->tid, ninserted);
-    printf("[bench] %d insert_time = %.2f seconds\n", tp->tid, td );
-    printf("[bench] %d insert_tput = %.2f MOPS\n", tp->tid, ninserted / td / MILLION);
+    printf("[bench] %d num_inserted = %zu\n", tp->tid, tp->puts);
+    printf("[bench] %d insert_time = %.2f seconds\n", tp->tid, tp->time );
+    printf("[bench] %d insert_tput = %.2f MOPS\n", tp->tid, tp->tput / MILLION);
 
     pthread_exit(NULL);
 }
@@ -130,19 +138,14 @@ int main(int argc, char **argv)
 {
     int ch;
 
-    while ((ch = getopt(argc, argv, "p:q:t:d:h")) != -1) {
+    while ((ch = getopt(argc, argv, "p:t:h")) != -1) {
         switch (ch) {
         case 'p':
             power = atoi(optarg);
             break;
-        case 'q':
-            nq  = 1 << atoi(optarg);
-            break;
         case 't':
             nt  = atoi(optarg);
             break;
-        case 'd':
-            duration = atof(optarg);
         case 'h':
             usage();
             exit(-1);
@@ -151,12 +154,12 @@ int main(int argc, char **argv)
             exit(-1);
         }
     }
-    size_t numkeys = (1 << power) * 3.7;
 
-    //numkeys = numkeys*0.959;
+    size_t totalkeys = (1 << power) * 4;
+    size_t numkeys = totalkeys * load_factor[0];
 
     printf("[bench] power = %zu\n", power);
-    printf("[bench] total_keys = %zu  (%.2f M)\n", numkeys, (float) numkeys / MILLION); 
+    printf("[bench] total_keys = %zu  (%.2f M)\n", totalkeys, (float) totalkeys / MILLION); 
     printf("[bench] key_size = %zu bits\n", sizeof(KeyType) * 8);
     printf("[bench] value_size = %zu bits\n", sizeof(ValType) * 8);
     printf("------------------------------\n");
@@ -167,9 +170,7 @@ int main(int argc, char **argv)
 
     size_t ninserted = numkeys;
 
-    double ts, td;
-
-    ts = time_now();
+    double ts = time_now();
 
     for (size_t i = 1; i < numkeys; i++) {
         KeyType key = (KeyType) i;
@@ -181,7 +182,7 @@ int main(int argc, char **argv)
         }
     }
 
-    td = time_now() - ts;
+    double td = time_now() - ts;
 
     printf("[bench] num_inserted = %zu\n", ninserted );
     printf("[bench] insert_time = %.2f seconds\n", td );
@@ -193,51 +194,59 @@ int main(int argc, char **argv)
     //rng.seed(static_cast<unsigned int>(std::time(0));
     rng.seed(123456);
 
-    printf("[bench] looking up keys in the hash table\n");
+    printf("[bench] concurrent write and reads in the hash table\n");
 
-    pthread_t threads[nt];
-    thread_param tp[nt];
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
+    int l = 0;
+    while((l < sizeof(load_factor)/sizeof(double) - 1)) {
+        printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+        printf("[bench] load range %.2f -- %.2f\n",load_factor[l],load_factor[l+1]);
 
-    for (int i = 0; i < nt; i++) {
-        tp[i].tid = i;
+        pthread_t threads[nt+1];
+        thread_param tp[nt+1];
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        
+        for (int i = 0; i <= nt; i++) {
+            tp[i].tid = i;
+            tp[i].load_start = load_factor[l];
+            tp[i].load_end = load_factor[l+1];
 #ifdef __linux__
-        int c = 2 * i + 1 ; //assign_core(i);
-        cpu_set_t cpuset;
-        CPU_ZERO(&cpuset);
-        CPU_SET(c, &cpuset);
-        pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
+            int c = 2 * i + 1 ; //assign_core(i);
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            CPU_SET(c, &cpuset);
+            pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
 #endif
-        int rc = pthread_create(&threads[i],  &attr, exec_thread_r, (void*) &(tp[i]));
-        if (rc) {
-            perror("error, pthread_create\n");
-            exit(-1);
+            int rc;
+            if (i == nt)
+                rc = pthread_create(&threads[i],  &attr, exec_thread_w, (void*) &(tp[i]));
+            else
+                rc = pthread_create(&threads[i],  &attr, exec_thread_r, (void*) &(tp[i]));            
+            if (rc) {
+                perror("error, pthread_create\n");
+                exit(-1);
+            }
         }
+        
+        double lookup_tput = 0.0;
+        double insert_tput = 0.0;
+        for (int i = 0; i <= nt; i++) {
+            pthread_join(threads[i], NULL);
+            if (i < nt)
+                lookup_tput += tp[i].tput;
+            else
+                insert_tput += tp[i].tput;
+        }
+        
+        printf("[bench] write ratio = %.3f\n", (double)insert_tput / (lookup_tput + insert_tput));
+        printf("[bench] aggregate lookup throughput = %.3lf MOPS\n", (double) lookup_tput / MILLION);
+
+        writing = true;
+        l++;
     }
     
-//---- write thread ---
-    int i = nt;
-    tp[i].tid = i;
-#ifdef __linux__
-    int c = 2 * i + 1 ; //assign_core(i);
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(c, &cpuset);
-    pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
-#endif
-    int rc = pthread_create(&threads[i],  &attr, exec_thread_w, (void*) &(tp[i]));
-    if (rc) {
-        perror("error, pthread_create\n");
-        exit(-1);
-    }
-//---- write thread ---
-
-    double total_tput = 0.0;
-    size_t total_puts = 0;
-    for (int i = 0; i <= nt; i++) {
-        pthread_join(threads[i], NULL);
-    }
+    cuckoo_report(table);
+    cuckoo_exit(table);
 
     return 0;
 }
