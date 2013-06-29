@@ -46,7 +46,7 @@ static size_t nr = 1 << 25;
 static cuckoo_hashtable_t* table = NULL;
 
 
-static double load_factor[6] = {0.2, 0.5, 0.8, 0.9, 0.94, 1};
+static double load_factor[5] = {0.5, 0.8, 0.9, 0.94, 0.954};
 
 void usage() {
     printf("./bench_setsep [-p #] [-t #] [-r #] [-h]\n");
@@ -168,7 +168,7 @@ int main(int argc, char **argv)
 
     double ts = time_now();
 
-    for (size_t i = 1; i < numkeys; i++) {
+    for (size_t i = 1; i <= numkeys; i++) {
         KeyType key = (KeyType) i;
         ValType val = (ValType) i * 2 - 1;
         cuckoo_status st = cuckoo_insert(table, (const char*) &key, (const char*) &val);
@@ -206,7 +206,7 @@ int main(int argc, char **argv)
     int l = 0;
     while(l < sizeof(load_factor)/sizeof(double) - 1) {
         printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-        printf("[bench] load range %.2f -- %.2f\n",load_factor[l],load_factor[l+1]);
+        printf("[bench] load range %.3f -- %.3f\n",load_factor[l],load_factor[l+1]);
 
         pthread_t threads[nt];
         thread_param tp[nt];
