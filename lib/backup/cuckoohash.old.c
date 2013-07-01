@@ -17,16 +17,6 @@
 #define HASHPOWER_DEFAULT 16
 
 /*
- * The maximum number of cuckoo operations per insert,
- */
-#define MAX_CUCKOO_COUNT 500
-
-/*
- * The number of cuckoo paths
- */
-#define NUM_CUCKOO_PATH 2
-
-/*
  * The array of version counter
  */
 #define  counter_size  ((uint32_t)1 << (13))
@@ -36,7 +26,6 @@
 /*
  * the structure of every two buckets
  */
-//#define bucketsize 4
 typedef struct {
     KeyType keys[bucketsize];
     ValType vals[bucketsize];
