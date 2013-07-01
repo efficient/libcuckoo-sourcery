@@ -39,7 +39,7 @@
 /*
  * the structure of every two buckets
  */
-#define bucketsize 4
+//#define bucketsize 4
 typedef struct {
     KeyType keys[bucketsize];
     ValType vals[bucketsize];

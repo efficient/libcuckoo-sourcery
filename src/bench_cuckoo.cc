@@ -124,8 +124,7 @@ int main(int argc, char **argv)
             exit(-1);
         }
     }
-    size_t numkeys = (1 << power) * 4;
-
+    size_t numkeys = (1 << power) * bucketsize;
     //numkeys = numkeys*0.959;
 
     printf("[bench] power = %zu\n", power);

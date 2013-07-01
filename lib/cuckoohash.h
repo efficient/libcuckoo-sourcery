@@ -32,7 +32,7 @@ typedef enum {
     failure_path_invalid = 8,
 } cuckoo_status;
 
-
+#define bucketsize 4
 
 /*
  * the structure of a buckoo hash table

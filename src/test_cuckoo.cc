@@ -31,7 +31,7 @@ int main(int argc, char** argv)
     bool passed = true;
     int i;    
     size_t power = 20;
-    size_t numkeys = (1 << power) * 4;
+    size_t numkeys = (1 << power) * bucketsize;
 
     printf("initializing two hash tables\n");
 

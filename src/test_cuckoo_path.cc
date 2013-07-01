@@ -28,7 +28,7 @@ int main(int argc, char** argv)
     bool passed = true;
     int i=0;    
     size_t power = 20;
-    size_t numkeys = (1 << power) * 4;
+    size_t numkeys = (1 << power) * bucketsize;
 
     printf("number of keys: %zu\n",numkeys);
 

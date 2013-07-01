@@ -72,7 +72,7 @@ void* exec_thread_r(void* p) {
     tp->gets = 0;
     tp->cpu =  sched_getcpu();
 
-    size_t numkeys_inserted = (1 << power) * 4 * tp->load_start;
+    size_t numkeys_inserted = (1 << power) * bucketsize * tp->load_start;
     size_t numkeys_read = numkeys_inserted / nt;
     size_t numkeys_read_start = numkeys_read * tp->tid + 1;
     size_t numkeys_read_end = numkeys_read * (tp->tid + 1);
@@ -106,9 +106,9 @@ void* exec_thread_w(void* p) {
     tp->puts = 0;
     tp->cpu =  sched_getcpu();
 
-    size_t numkeys_inserted = (1 << power) * 4 * tp->load_start;
+    size_t numkeys_inserted = (1 << power) * bucketsize * tp->load_start;
     size_t numkeys_write_start = numkeys_inserted + 1;
-    size_t numkeys_write_end =  (1 << power) * 4 * tp->load_end;
+    size_t numkeys_write_end =  (1 << power) * bucketsize * tp->load_end;
 
     size_t i_w = numkeys_write_start;
     double ts = time_now();
@@ -155,7 +155,7 @@ int main(int argc, char **argv)
         }
     }
 
-    size_t totalkeys = (1 << power) * 4;
+    size_t totalkeys = (1 << power) * bucketsize;
     size_t numkeys = totalkeys * load_factor[0];
 
     printf("[bench] power = %zu\n", power);
