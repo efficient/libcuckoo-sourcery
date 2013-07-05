@@ -36,18 +36,18 @@ typedef enum {
 /*
  * number of slots per bucket
  */
-#define bucketsize 4
+#define bucketsize 8
 
 /*
  * The maximum number of cuckoo operations per insert,
  */
-#define MAX_CUCKOO_COUNT 500
+#define MAX_CUCKOO_COUNT 200
 
 /*
  * The max length of the cuckoo path for BFS
  * bucketsize ^ MAX_BFS_DEPTH > MAX_CUCKOO_COUNT / 2
  */
-#define MAX_BFS_DEPTH 5
+#define MAX_BFS_DEPTH 4
 
 /*
  * The number of cuckoo paths for DFS
