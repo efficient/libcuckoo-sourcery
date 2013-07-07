@@ -1,28 +1,41 @@
 noinst_PROGRAMS = test_cuckoo test_cuckoo_mt bench_cuckoo test_cuckoo_path bench_cuckoo_w_mr bench_cuckoo_rw
 
+# change glibc_dir to the folder where glibc with TSX lock elision is installed
+#glibc_dir = /home/xiaozhou/Research/gnu/glibc-build
+
+glibc_ld = 
+# comment out the following line if glibc with TSX lock elision is NOT installed
+#glibc_ld = $(glibc_dir)/nptl/libpthread.a $(glibc_dir)/nptl/libpthread_nonshared.a $(glibc_dir)/libc.a
+
 test_cuckoo_SOURCES = test_cuckoo.cc
-test_cuckoo_LDFLAGS = -L../lib -L$(top_srcdir)/lib -lcuckoo
+test_cuckoo_LDFLAGS = -all-static -L../lib -L$(top_srcdir)/lib -lcuckoo -lc
 test_cuckoo_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
+test_cuckoo_LDADD = $(glibc_ld)
 
 test_cuckoo_path_SOURCES = test_cuckoo_path.cc
-test_cuckoo_path_LDFLAGS = -L../lib -L$(top_srcdir)/lib -lcuckoo
+test_cuckoo_path_LDFLAGS = -all-static -L../lib -L$(top_srcdir)/lib -lcuckoo -lc
 test_cuckoo_path_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
+test_cuckoo_path_LDADD = $(glibc_ld)
 
 test_cuckoo_mt_SOURCES = test_cuckoo_mt.cc
-test_cuckoo_mt_LDFLAGS = -L../lib -L$(top_srcdir)/lib -lcuckoo
+test_cuckoo_mt_LDFLAGS = -all-static -L../lib -L$(top_srcdir)/lib -lcuckoo -lc 
 test_cuckoo_mt_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
+test_cuckoo_mt_LDADD = $(glibc_ld)
 
 bench_cuckoo_SOURCES = bench_cuckoo.cc
-bench_cuckoo_LDFLAGS = -L../lib -L$(top_srcdir)/lib -lcuckoo
+bench_cuckoo_LDFLAGS = -all-static -L../lib -L$(top_srcdir)/lib -lcuckoo -lc
 bench_cuckoo_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
+bench_cuckoo_LDADD = $(glibc_ld)
 
 bench_cuckoo_w_mr_SOURCES = bench_cuckoo_w_mr.cc
-bench_cuckoo_w_mr_LDFLAGS = -L../lib -L$(top_srcdir)/lib -lcuckoo
+bench_cuckoo_w_mr_LDFLAGS = -all-static -L../lib -L$(top_srcdir)/lib -lcuckoo -lc
 bench_cuckoo_w_mr_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
+bench_cuckoo_w_mr_LDADD = $(glibc_ld)
 
 bench_cuckoo_rw_SOURCES = bench_cuckoo_rw.cc
-bench_cuckoo_rw_LDFLAGS = -L../lib -L$(top_srcdir)/lib -lcuckoo
+bench_cuckoo_rw_LDFLAGS = -all-static -L../lib -L$(top_srcdir)/lib -lcuckoo -lc
 bench_cuckoo_rw_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
+bench_cuckoo_rw_LDADD = $(glibc_ld)
 
 AM_CFLAGS = -Wall
 AM_CPPFLAGS = -std=c++0x -I../lib -I$(top_srcdir)/lib
