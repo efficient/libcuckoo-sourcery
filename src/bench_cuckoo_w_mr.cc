@@ -211,7 +211,7 @@ int main(int argc, char **argv)
             tp[i].load_start = load_factor[l];
             tp[i].load_end = load_factor[l+1];
 #ifdef __linux__
-            int c = 2 * i + 1 ; //assign_core(i);
+            int c = i; //2 * i + 1 ; //assign_core(i);
             cpu_set_t cpuset;
             CPU_ZERO(&cpuset);
             CPU_SET(c, &cpuset);

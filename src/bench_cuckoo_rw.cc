@@ -46,7 +46,7 @@ static size_t nr = 1 << 25;
 static cuckoo_hashtable_t* table = NULL;
 
 
-static double load_factor[5] = {0.5, 0.8, 0.9, 0.94, 0.954};
+static double load_factor[4] = {0.5, 0.9, 0.94, 0.954};
 
 void usage() {
     printf("./bench_setsep [-p #] [-t #] [-r #] [-h]\n");
@@ -219,7 +219,7 @@ int main(int argc, char **argv)
             tp[i].load_start = load_factor[l];
             tp[i].load_end = load_factor[l+1];
 #ifdef __linux__
-            int c = 2 * i + 1 ; //assign_core(i);
+            int c = i;//2 * i + 1 ; //assign_core(i);
             cpu_set_t cpuset;
             CPU_ZERO(&cpuset);
             CPU_SET(c, &cpuset);
