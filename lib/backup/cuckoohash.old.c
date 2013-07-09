@@ -566,15 +566,43 @@ cuckoo_hashtable_t* cuckoo_init(const int hashtable_init) {
         goto Cleanup;
     }
 
-    h->hashpower  = (hashtable_init > 0) ? hashtable_init : HASHPOWER_DEFAULT;
-    h->hashitems  = 0;
     h->expanding  = false;
     pthread_mutex_init(&h->lock, NULL);
 
-    h->buckets = malloc(tablesize(h));
-    if (! h->buckets) {
-        fprintf(stderr, "Failed to init hashtable.\n");
-        goto Cleanup;
+    if (hashtable_init != -1) {
+        h->hashpower  = (hashtable_init > 0) ? hashtable_init : HASHPOWER_DEFAULT;
+        h->hashitems  = 0;
+        h->buckets = malloc(tablesize(h));
+        if (! h->buckets) {
+            fprintf(stderr, "Failed to init hashtable.\n");
+            goto Cleanup;
+        }
+        memset(h->buckets, 0, tablesize(h));
+    }
+
+    //read from file
+    else{
+        FILE *fp;
+        fp = fopen("hashtable", "r");
+
+        size_t hashpower;
+        fseek(fp, SEEK_SET, 0);
+        if(!fread(&hashpower, sizeof(size_t), 1, fp)) goto Cleanup;
+        h->hashpower = hashpower;
+
+        h->buckets = malloc(tablesize(h));
+        if (! h->buckets) {
+            fprintf(stderr, "Failed to init hashtable.\n");
+            goto Cleanup;
+        }
+
+        fseek(fp, SEEK_SET, sizeof(size_t));
+        if(!fread(&h->hashitems, sizeof(size_t), 1, fp)) goto Cleanup;
+
+        fseek(fp, SEEK_SET, 2 * sizeof(size_t));
+        if(!fread(h->buckets, tablesize(h), 1, fp)) goto Cleanup;
+
+        fclose(fp);
     }
 
     h->counters = malloc(counter_size * sizeof(uint32_t));
@@ -582,9 +610,6 @@ cuckoo_hashtable_t* cuckoo_init(const int hashtable_init) {
         fprintf(stderr, "Failed to init counter array.\n");
         goto Cleanup;
     }
-
-
-    memset(h->buckets, 0, tablesize(h));
     memset(h->counters, 0, counter_size * sizeof(uint32_t));
 
     return h;
@@ -713,6 +738,17 @@ void cuckoo_report(cuckoo_hashtable_t* h) {
     DBG("total number of items %zu\n", h->hashitems);
     DBG("total size %zu Bytes, or %.2f MB\n", tablesize(h), (float) tablesize(h) / (1 <<20));
     DBG("load factor %.4f\n", 1.0 * h->hashitems / bucketsize / hashsize(h->hashpower));
+}
+
+void cuckoo_dump(cuckoo_hashtable_t* h) {
+
+    FILE *fp;
+    fp = fopen("hashtable", "w");
+    size_t hashpower = h->hashpower;
+    fwrite(&hashpower, sizeof(size_t), 1, fp);
+    fwrite(&h->hashitems, sizeof(size_t), 1, fp);
+    fwrite(h->buckets, tablesize(h), 1, fp);
+    fclose(fp);
 }
 
 float cuckoo_loadfactor(cuckoo_hashtable_t* h) {

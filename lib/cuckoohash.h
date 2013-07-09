@@ -171,6 +171,15 @@ cuckoo_status cuckoo_expand(cuckoo_hashtable_t* h);
 void cuckoo_report(cuckoo_hashtable_t* h);
 
 
+/**
+ * @brief Dump hash table to a file named "hashtable"
+ *
+ * @param h handler to the hash table
+ * 
+ * @return Void
+ */
+void cuckoo_dump(cuckoo_hashtable_t* h);
+
 
 /** 
  * @brief Return the load factor of this hash table
