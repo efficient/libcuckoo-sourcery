@@ -32,6 +32,8 @@ typedef enum {
     failure_path_invalid = 8,
 } cuckoo_status;
 
+#define  counter_size  ((uint32_t)1 << (16))
+#define  counter_mask  (counter_size - 1)
 
 /*
  * number of slots per bucket
@@ -41,7 +43,7 @@ typedef enum {
 /*
  * The maximum number of cuckoo operations per insert,
  */
-#define MAX_CUCKOO_COUNT 200
+#define MAX_CUCKOO_COUNT 250
 
 /*
  * The max length of the cuckoo path for BFS
@@ -73,11 +75,7 @@ typedef struct {
     /* pointer to the array of buckets */
     void*  buckets;
 
-    /*
-     *  keyver_array is an array of version counters
-     *  we keep keyver_count = 8192
-     *
-     */
+    /* an array of version counters */
     void* counters;
 
     /* the mutex to serialize insert, delete, expand */

@@ -17,13 +17,6 @@
 #define HASHPOWER_DEFAULT 16
 
 /*
- * The array of version counter
- */
-#define  counter_size  ((uint32_t)1 << (13))
-#define  counter_mask  (counter_size - 1)
-
-
-/*
  * the structure of every two buckets
  */
 typedef struct {

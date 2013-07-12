@@ -19,13 +19,6 @@
 #define HASHPOWER_DEFAULT 16
 
 /*
- * The array of version counter
- */
-#define  counter_size  ((uint32_t)1 << (13))
-#define  counter_mask  (counter_size - 1)
-
-
-/*
  * the structure of every two buckets
  */
 typedef struct {
@@ -223,39 +216,21 @@ void init_queue(queue *q)
 {
     q->first = 0;
     q->last = MAX_CUCKOO_COUNT-1;
-    //q->count = 0;
+
 }
 
 static void enqueue(queue *q, b_slot x)
 {
-    //if (q->count >= MAX_CUCKOO_COUNT)
-    //    printf("Warning: queue overflow enqueue x=%d\n",x.bucket);
-    //else {
     q->last = (q->last+1) % MAX_CUCKOO_COUNT;
     q->slots[ q->last ] = x;
-    //q->count = q->count + 1;
-    //}
 }
 
 static b_slot dequeue(queue *q)
 {
-    //b_slot x;
-    //if (q->count <= 0) printf("Warning: empty queue dequeue.\n");
-    //else {
     b_slot x = q->slots[ q->first ];
     q->first = (q->first+1) % MAX_CUCKOO_COUNT;
-    //q->count = q->count - 1;
-    //}
     return(x);
 }
-
-/*
-static bool empty_q(queue *q)
-{
-    if (q->count <= 0) return (true);
-    else return (false);
-}
-*/
 
 // --- end of queue functions ---
 
@@ -284,16 +259,18 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
         for (int k = 0; k < bucketsize; k++) {
             size_t j = (r+k) % bucketsize;
 
+            uint32_t hv = hv_next;
             size_t bucket_child = bucket_child_next;
             //uint32_t hv = _hashed_key((char*) &TABLE_KEY(h, i, j));
             //size_t bucket_child = _alt_index(h, hv, i);
-             
+
             if (k < (bucketsize-1)) { 
                 hv_next = _hashed_key((char*) &TABLE_KEY(h, i, ((j+1)%bucketsize)));
                 bucket_child_next = _alt_index(h, hv_next, i);
                 //__builtin_prefetch(&h->buckets[bucket_child_next]);
             }
-            
+             
+            /*          
             if(bucket_child == x.parent)
                 continue;
             
@@ -307,7 +284,7 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
             slot_keys[k] = bucket_child;
             if(duplicated == true)
                 continue;
-                        
+            */          
             b_slot y = {.bucket=bucket_child, .depth=x.depth+1, .parent=x.bucket,\
                         .pathcode = x.pathcode * bucketsize + j};
             
@@ -374,6 +351,11 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
                             CuckooRecord* cuckoo_path,
                             size_t depth) {
 
+    CuckooRecord *last   = cuckoo_path + depth;
+    if(!is_slot_empty(h, last->bucket, last->slot)) {
+        return depth;
+    }
+
     while (depth > 0) {
 
         /*
@@ -398,11 +380,7 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
             return depth;
         }
 
-        if(!is_slot_empty(h, i2, j2)) {
-            return depth;
-        }
-            
-        assert(is_slot_empty(h, i2, j2));
+        //assert(is_slot_empty(h, i2, j2));
 
         start_incr_counter2(h, i1, i2);
 
@@ -572,6 +550,46 @@ TryRead:
     }
 }
 
+
+static cuckoo_status _cuckoo_find_key(cuckoo_hashtable_t* h,
+                                      const char *key,
+                                      char *val,
+                                      size_t i1,
+                                      size_t i2,
+                                      uint32_t *v1,
+                                      uint32_t *v2) {
+    bool result;
+
+    uint32_t vs1, vs2, ve1, ve2;
+TryRead:
+    start_read_counter2(h, i1, i2, vs1, vs2);
+
+    if (((vs1 & 1) || (vs2 & 1) )) {
+        goto TryRead;
+    }
+
+    result = _try_read_from_bucket(h, key, val, i1);
+    if (!result) {
+        result = _try_read_from_bucket(h, key, val, i2);
+    }
+
+    end_read_counter2(h, i1, i2, ve1, ve2);
+
+    if (((vs1 != ve1) || (vs2 != ve2))) {
+        goto TryRead;
+    }
+
+    *v1 = vs1;
+    *v2 = vs2;
+
+    if (result) {
+        return ok;
+    } else {
+        return failure_key_not_found;
+    }
+}
+
+
 static cuckoo_status _cuckoo_delete(cuckoo_hashtable_t* h,
                                     const char* key,
                                     size_t i1,
@@ -634,7 +652,7 @@ cuckoo_hashtable_t* cuckoo_init(const int hashtable_init) {
         if (! h->buckets) {
             fprintf(stderr, "Failed to init hashtable.\n");
             goto Cleanup;
-        }        
+        }
         memset(h->buckets, 0, tablesize(h));
     }
 
@@ -644,7 +662,7 @@ cuckoo_hashtable_t* cuckoo_init(const int hashtable_init) {
         fp = fopen("hashtable", "r");
 
         size_t hashpower;
-        fseek(fp, SEEK_SET, 0);        
+        fseek(fp, SEEK_SET, 0);
         if(!fread(&hashpower, sizeof(size_t), 1, fp)) goto Cleanup;
         h->hashpower = hashpower;
 
@@ -652,7 +670,7 @@ cuckoo_hashtable_t* cuckoo_init(const int hashtable_init) {
         if (! h->buckets) {
             fprintf(stderr, "Failed to init hashtable.\n");
             goto Cleanup;
-        }        
+        }
 
         fseek(fp, SEEK_SET, sizeof(size_t));
         if(!fread(&h->hashitems, sizeof(size_t), 1, fp)) goto Cleanup;
@@ -715,16 +733,29 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     size_t i1   = _index_hash(h, hv);
     size_t i2   = _alt_index(h, hv, i1);
 
+    uint32_t vs1 = 0;
+    uint32_t vs2 = 0;
     ValType oldval;
-    cuckoo_status st = _cuckoo_find(h, key, (char*) &oldval, i1, i2);
+    cuckoo_status st = _cuckoo_find_key(h, key, (char*) &oldval, i1, i2, &vs1, &vs2);
     if  (st == ok) {
-        printf("key duplicated\n");
+        //printf("%d %d\n",vs1,vs2);
+        //printf("key duplicated\n");
         return failure_key_duplicated;
     }
     
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i1, j)) {
-            mutex_lock(&h->lock);
+            mutex_lock(&h->lock);            
+            uint32_t ve1, ve2;
+            start_read_counter2(h, i1, i2, ve1, ve2);
+            if (((vs1 != ve1) || (vs2 != ve2))) {
+                ValType oldval;
+                cuckoo_status st_key = _cuckoo_find(h, key, (char*) &oldval, i1, i2);
+                if  (st_key == ok) {
+                    mutex_unlock(&h->lock);
+                    return failure_key_duplicated;
+                }                
+            }
             if(_try_add_to_slot(h,key,val,i1,j)){
                 if (h->expanding) {
                     _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
@@ -737,9 +768,20 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
             break;
         }
     }    
+    
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i2, j)) {
-            mutex_lock(&h->lock);
+            mutex_lock(&h->lock);            
+            uint32_t ve1, ve2;
+            start_read_counter2(h, i1, i2, ve1, ve2);
+            if (((vs1 != ve1) || (vs2 != ve2))) {
+                ValType oldval;
+                cuckoo_status st_key = _cuckoo_find(h, key, (char*) &oldval, i1, i2);
+                if  (st_key == ok) {
+                    mutex_unlock(&h->lock);
+                    return failure_key_duplicated;
+                }                
+            }
             if(_try_add_to_slot(h,key,val,i2,j)){
                 if (h->expanding) {
                     _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
@@ -771,11 +813,25 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
             break;
         }
         mutex_lock(&h->lock);
+
+        uint32_t ve1, ve2;
+        start_read_counter2(h, i1, i2, ve1, ve2);
+        if (((vs1 != ve1) || (vs2 != ve2))) {
+            ValType oldval;
+            cuckoo_status st_key = _cuckoo_find(h, key, (char*) &oldval, i1, i2);
+            if  (st_key == ok) {
+                mutex_unlock(&h->lock);
+                return failure_key_duplicated;
+            }
+
+        }
+
         int curr_depth = _cuckoopath_move(h, cuckoo_path, depth);
         if (curr_depth == 0) {
             //printf("cuckoo path length: %d\n", depth);
             size_t i = cuckoo_path[0].bucket;
-            if (_try_add_to_bucket(h, key, val, i)) {
+            size_t j = cuckoo_path[0].slot;
+            if (_try_add_to_slot(h, key, val, i, j)) {
                 st = ok;
             }
             if (h->expanding) {
@@ -868,6 +924,7 @@ void cuckoo_dump(cuckoo_hashtable_t* h) {
     fwrite(h->buckets, tablesize(h), 1, fp);
     fclose(fp);
 }
+
 
 float cuckoo_loadfactor(cuckoo_hashtable_t* h) {
     return 1.0 * h->hashitems / bucketsize / hashsize(h->hashpower);
