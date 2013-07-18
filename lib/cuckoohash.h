@@ -32,7 +32,7 @@ typedef enum {
     failure_path_invalid = 8,
 } cuckoo_status;
 
-#define  counter_size  ((uint32_t)1 << (16))
+#define  counter_size  ((uint64_t)1 << (18))
 #define  counter_mask  (counter_size - 1)
 
 /*
@@ -56,37 +56,35 @@ typedef enum {
  */
 #define NUM_CUCKOO_PATH 2
 
-
 /*
  * the structure of a buckoo hash table
  */
-
 typedef struct {
 
-    /* number of items inserted */
-    size_t hashitems;
-
-    /* 2**hashpower is the number of buckets */
-    volatile size_t hashpower;
-
-    /* the mask for bucket index */
-    size_t hashmask;
-
+  /* number of items inserted */
+  size_t hashitems;
+  
+  /* 2**hashpower is the number of buckets */
+  volatile size_t hashpower;
+  
+  /* the mask for bucket index */
+  size_t hashmask;
+  
     /* pointer to the array of buckets */
-    void*  buckets;
-
-    /* an array of version counters */
-    void* counters;
-
-    /* the mutex to serialize insert, delete, expand */
-    pthread_mutex_t lock;
-
-    /* denoting if the table is doing expanding */
-    bool expanding;
-
+  void*  buckets;
+  
+  /* an array of version counters */
+  void* counters;
+  
+  /* the mutex to serialize insert, delete, expand */
+  pthread_mutex_t lock;
+  
+  /* denoting if the table is doing expanding */
+  bool expanding;
+  
     /* number of buckets has been cleaned */
-    size_t cleaned_buckets;
-
+  size_t cleaned_buckets;
+  
 } cuckoo_hashtable_t;
 
 

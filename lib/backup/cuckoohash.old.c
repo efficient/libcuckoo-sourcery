@@ -390,7 +390,7 @@ static bool _try_add_to_bucket(cuckoo_hashtable_t* h,
             memcpy(&TABLE_VAL(h, i, j), val, sizeof(ValType));
 
             end_incr_counter(h, i);
-            h->hashitems++;
+            //h->hashitems++;
             return true;
         }
     }
@@ -419,7 +419,7 @@ static bool _try_del_from_bucket(cuckoo_hashtable_t* h,
             SLOT_CLEAN(h, i, j);
             end_incr_counter(h, i);
 
-            h->hashitems --;
+            //h->hashitems --;
             return true;
         }
     }
