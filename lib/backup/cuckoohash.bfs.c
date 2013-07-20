@@ -249,9 +249,7 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
         b_slot x = dequeue(&bucket_q);
         size_t i = x.bucket;
 
-        int slot_keys[bucketsize];
         size_t r = (cheap_rand() >> 20) % bucketsize;
-
         for (int k = 0; k < bucketsize; k++) {
             size_t j = (r+k) % bucketsize;
 
@@ -711,10 +709,10 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
         //printf("key duplicated\n");
         return failure_key_duplicated;
     }
-    
+
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i1, j)) {
-            mutex_lock(&h->lock);            
+            mutex_lock(&h->lock);
             uint32_t ve1, ve2;
             start_read_counter2(h, i1, i2, ve1, ve2);
             if (((vs1 != ve1) || (vs2 != ve2))) {
@@ -722,7 +720,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
                     mutex_unlock(&h->lock);
                     return failure_key_duplicated;
                 }                
-            }
+            }    
             if(_try_add_to_slot(h,key,val,i1,j)){
                 if (h->expanding) {
                     _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
@@ -735,7 +733,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
             break;
         }
     }    
-    
+
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i2, j)) {
             mutex_lock(&h->lock);            
@@ -773,10 +771,9 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     while(1){
         size_t num_kicks = 0;
         int depth = _cuckoopath_search_bfs(h, cuckoo_path, i1, i2, &num_kicks);
-
-        if (depth < 0) {
+        if (depth < 0)
             break;
-        }
+
         mutex_lock(&h->lock);
 
         uint32_t ve1, ve2;
@@ -786,7 +783,6 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
                 mutex_unlock(&h->lock);
                 return failure_key_duplicated;
             }
-
         }
 
         int curr_depth = _cuckoopath_move(h, cuckoo_path, depth);

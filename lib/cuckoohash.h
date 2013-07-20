@@ -16,9 +16,9 @@
 
 #include "config.h"
 #include "cuckoohash_config.h"
-//#include "hash.h"
 #include "city.h"
 #include "util.h"
+#include "tsx.h"
 
 typedef enum {
     ok = 0,
