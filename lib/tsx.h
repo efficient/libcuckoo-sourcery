@@ -83,17 +83,16 @@ static __force_inline int _lock_elision (pthread_mutex_t *mutex)
 	//if ((mutex)->__data.__lock == 0)
 	return 0;
 
-          /* Lock was busy. Fall back to normal locking.
-             Could also _xend here but xabort with 0xff code
-             is more visible in the profiler.  */
+	/* Lock was busy. Fall back to normal locking.
+	   Could also _xend here but xabort with 0xff code
+	   is more visible in the profiler.  */
         //_xabort (_ABORT_LOCK_BUSY);
       }
-      if (!(status & _XABORT_RETRY)) {
-	//printf("break\n");
+      if (!(status & _XABORT_RETRY))
 	break;
-      }
+ 
   }
-  //printf("lock\n");
+
   /* Use a normal lock here.  */
   return pthread_mutex_lock(mutex);
 }
@@ -105,8 +104,7 @@ static __force_inline int _unlock_elision(pthread_mutex_t *mutex) {
     return 0;
   }
 
-  else
-    return pthread_mutex_unlock(mutex);
+  return pthread_mutex_unlock(mutex);
 
 }
 
