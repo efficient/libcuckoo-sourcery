@@ -61,29 +61,26 @@ typedef enum {
  */
 typedef struct {
 
+  /* an array of version counters */
+  void* counters;
+    
+  /* pointer to the array of buckets */
+  void*  buckets;
+  
+  /* the mutex to serialize insert, delete, expand */
+  pthread_mutex_t lock;
+
   /* number of items inserted */
   size_t hashitems;
   
   /* 2**hashpower is the number of buckets */
   volatile size_t hashpower;
-  
-  /* the mask for bucket index */
-  size_t hashmask;
-  
-    /* pointer to the array of buckets */
-  void*  buckets;
-  
-  /* an array of version counters */
-  void* counters;
-  
-  /* the mutex to serialize insert, delete, expand */
-  pthread_mutex_t lock;
+
+  /* number of buckets has been cleaned */
+  size_t cleaned_buckets;
   
   /* denoting if the table is doing expanding */
   bool expanding;
-  
-    /* number of buckets has been cleaned */
-  size_t cleaned_buckets;
   
 } cuckoo_hashtable_t;
 

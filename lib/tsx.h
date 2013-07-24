@@ -76,21 +76,21 @@ static __force_inline int _xtest(void)
 static __force_inline int _lock_elision (pthread_mutex_t *mutex)
 {
   unsigned status;
-  int try_xbegin;
+  int retry = 0;
 
-  for (try_xbegin = 10; try_xbegin > 0; try_xbegin--) {
-      if ((status = _xbegin()) == _XBEGIN_STARTED) {
-	//if ((mutex)->__data.__lock == 0)
+  while(1) {
+    if ((status = _xbegin()) == _XBEGIN_STARTED) {
+      if ((mutex)->__data.__lock == 0)
 	return 0;
 
-	/* Lock was busy. Fall back to normal locking.
-	   Could also _xend here but xabort with 0xff code
-	   is more visible in the profiler.  */
-        //_xabort (_ABORT_LOCK_BUSY);
-      }
-      if (!(status & _XABORT_RETRY))
+      _xabort (_ABORT_LOCK_BUSY);
+    }
+
+    if (!(status & _XABORT_RETRY)) {
+      retry ++;
+      if (retry > 10)
 	break;
- 
+    }
   }
 
   /* Use a normal lock here.  */
@@ -99,13 +99,12 @@ static __force_inline int _lock_elision (pthread_mutex_t *mutex)
 
 static __force_inline int _unlock_elision(pthread_mutex_t *mutex) {
 
-  if ((mutex)->__data.__owner == 0) {
+  if ((mutex)->__data.__lock == 0) {
     _xend();
     return 0;
   }
 
   return pthread_mutex_unlock(mutex);
-
 }
 
 
