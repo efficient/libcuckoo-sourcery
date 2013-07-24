@@ -42,8 +42,6 @@
 #define _XABORT_CODE(x)		(((x) >> 24) & 0xff)
 
 #define _ABORT_LOCK_BUSY 	0xff
-#define _ABORT_LOCK_IS_LOCKED	0xfe
-#define _ABORT_NESTED_TRYLOCK	0xfd
 
 #ifndef __ASSEMBLER__
 
@@ -80,9 +78,14 @@ static __force_inline int _lock_elision (pthread_mutex_t *mutex)
 
   while(1) {
     if ((status = _xbegin()) == _XBEGIN_STARTED) {
+
+      /* POSIX pthreads locking does not export an operation to query
+	 a lock's state directly. So we have to query the internal
+	 attribute of pthread_mutex_t data structure. */
       if ((mutex)->__data.__lock == 0)
 	return 0;
 
+      /* Lock was busy. Fall back to normal locking. */
       _xabort (_ABORT_LOCK_BUSY);
     }
 
