@@ -33,15 +33,19 @@
    it may be able to generate slightly better code. */
 
 #define _XBEGIN_STARTED		(~0u)
-#define _XABORT_EXPLICIT	(1 << 0)
-#define _XABORT_RETRY		(1 << 1)
-#define _XABORT_CONFLICT	(1 << 2)
-#define _XABORT_CAPACITY	(1 << 3)
-#define _XABORT_DEBUG		(1 << 4)
-#define _XABORT_NESTED		(1 << 5)
+#define _ABORT_EXPLICIT	        (1 << 0)
+#define _ABORT_RETRY		(1 << 1)
+#define _ABORT_CONFLICT	        (1 << 2)
+#define _ABORT_CAPACITY	        (1 << 3) 
+#define _ABORT_DEBUG		(1 << 4)
+#define _ABORT_NESTED		(1 << 5)
 #define _XABORT_CODE(x)		(((x) >> 24) & 0xff)
 
 #define _ABORT_LOCK_BUSY 	0xff
+
+#define _MAX_TRY_XBEGIN         10
+#define _MAX_ABORT_RETRY        5
+
 
 #ifndef __ASSEMBLER__
 
@@ -74,9 +78,9 @@ static __force_inline int _xtest(void)
 static __force_inline int _lock_elision (pthread_mutex_t *mutex)
 {
   unsigned status;
-  int retry = 0;
+  int abort_retry = 0;
 
-  while(1) {
+  for(int try_xbegin = 0; try_xbegin < _MAX_TRY_XBEGIN; try_xbegin ++) {
     if ((status = _xbegin()) == _XBEGIN_STARTED) {
 
       /* POSIX pthreads locking does not export an operation to query
@@ -89,10 +93,10 @@ static __force_inline int _lock_elision (pthread_mutex_t *mutex)
       _xabort (_ABORT_LOCK_BUSY);
     }
 
-    if (!(status & _XABORT_RETRY)) {
-      retry ++;
-      if (retry > 10)
+    if (!(status & _ABORT_RETRY)) {
+      if (abort_retry >= _MAX_ABORT_RETRY)
 	break;
+      abort_retry ++;
     }
   }
 
