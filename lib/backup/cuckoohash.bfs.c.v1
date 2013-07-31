@@ -266,12 +266,13 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
     b_slot x2 = {.bucket=i2, .depth=0, .pathcode=2, .parent=i1};
     enqueue(&bucket_q, x2);
 
+    size_t r = (cheap_rand() >> 20) % bucketsize;
+
     while ((*num_kicks < MAX_CUCKOO_COUNT)) { //&& empty_q(&bucket_q) == false
         b_slot x = dequeue(&bucket_q);
         size_t i = x.bucket;
 
         int slot_keys[bucketsize];
-        size_t r = (cheap_rand() >> 20) % bucketsize;
 
         uint32_t hv_next = _hashed_key((char*) &TABLE_KEY(h, i, r));
         size_t bucket_child_next = _alt_index(h, hv_next, i);
@@ -287,9 +288,9 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
             if (k < (bucketsize-1)) {
                 hv_next = _hashed_key((char*) &TABLE_KEY(h, i, ((j+1)%bucketsize)));
                 bucket_child_next = _alt_index(h, hv_next, i);
-                //__builtin_prefetch(&h->buckets[bucket_child_next]);
+                __builtin_prefetch(&((Bucket*)h->buckets)[bucket_child_next]);
             }
-
+            /*
             if(bucket_child == x.parent)
                 continue;
 
@@ -304,7 +305,7 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
             if(duplicated == true){
                 continue;
             }
-
+            */
             b_slot y = {.bucket=bucket_child, .depth=x.depth+1, .parent=x.bucket,\
                         .pathcode = x.pathcode*bucketsize + j};
 
@@ -492,7 +493,7 @@ static bool _try_add_to_bucket(cuckoo_hashtable_t* h,
             memcpy(&TABLE_VAL(h, i, j), val, sizeof(ValType));
 
             end_incr_counter(h, i);
-            h->hashitems++;
+            //h->hashitems++;
             return true;
         }
     }
@@ -521,7 +522,7 @@ static bool _try_del_from_bucket(cuckoo_hashtable_t* h,
             SLOT_CLEAN(h, i, j);
             end_incr_counter(h, i);
 
-            h->hashitems --;
+            //h->hashitems --;
             return true;
         }
     }

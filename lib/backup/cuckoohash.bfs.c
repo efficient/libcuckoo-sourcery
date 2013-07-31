@@ -5,7 +5,7 @@
  *         Xiaozhou Li <xl@cs.princeton.edu>
  * @date   Thu Jun 20 2013
  *
- * @brief  implementation of single-writer/multi-reader cuckoo hash
+ * @brief  implementation of multi-writer/multi-reader cuckoo hash
  *
  * @note   BFS version
  *
@@ -245,16 +245,27 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
     b_slot x2 = {.bucket=i2, .depth=0, .pathcode=2};
     enqueue(&bucket_q, x2);
 
+    size_t r = (cheap_rand() >> 20) % bucketsize;
+
     while ((*num_kicks < MAX_CUCKOO_COUNT)) {
         b_slot x = dequeue(&bucket_q);
         size_t i = x.bucket;
-
-        size_t r = (cheap_rand() >> 20) % bucketsize;
+        
+        uint32_t hv_next = _hashed_key((char*) &TABLE_KEY(h, i, r));
+        size_t bucket_child_next = _alt_index(h, hv_next, i);
+        
         for (int k = 0; k < bucketsize; k++) {
             size_t j = (r+k) % bucketsize;
 
-            uint32_t hv = _hashed_key((char*) &TABLE_KEY(h, i, j));
-            size_t bucket_child = _alt_index(h, hv, i);
+            size_t bucket_child = bucket_child_next;
+            //uint32_t hv = _hashed_key((char*) &TABLE_KEY(h, i, j));
+            //size_t bucket_child = _alt_index(h, hv, i);
+
+            if (k < (bucketsize-1)) {
+                hv_next = _hashed_key((char*) &TABLE_KEY(h, i, ((j+1)%bucketsize)));
+                bucket_child_next = _alt_index(h, hv_next, i);
+                __builtin_prefetch(&((Bucket*) h->buckets)[bucket_child_next]);
+            }
 
             b_slot y = {.bucket=bucket_child, .depth=x.depth+1,\
                         .pathcode = x.pathcode * bucketsize + j};
