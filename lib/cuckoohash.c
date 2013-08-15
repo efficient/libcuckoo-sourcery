@@ -32,7 +32,7 @@ Bucket;
 #define unlikely(x)   __builtin_expect((x), 0)
 
 /**
- *  @brief read the counter, ensured by x86 memory ordering model
+ *  @brief Read the counter, ensured by x86 memory ordering model
  *
  */
 #define start_read_counter(h, idx, version)                             \
@@ -64,7 +64,7 @@ Bucket;
 
 
 /**
- * @brief Atomic increase the counter
+ * @brief Atomically increase the counter
  *
  */
 #define start_incr_counter(h, idx)                                  \
@@ -404,7 +404,7 @@ static bool _try_read_from_bucket(cuckoo_hashtable_t* h,
 }
 
 /**
- * @brief Try to add key/val to bucket i slot j,
+ * @brief Try to add key/val to bucket i slot j
  *
  * @param key Pointer to the key to store
  * @param val Pointer to the value to store
@@ -434,7 +434,7 @@ static bool _try_add_to_slot(cuckoo_hashtable_t* h,
 } 
 
 /**
- * @brief Try to add key/val to bucket i,
+ * @brief Try to add key/val to bucket i
  *
  * @param key Pointer to the key to store
  * @param val Pointer to the value to store
@@ -463,7 +463,7 @@ static bool _try_add_to_bucket(cuckoo_hashtable_t* h,
 }
 
 /**
- * @brief Try to delete key and its corresponding value from bucket i,
+ * @brief Try to delete key and its corresponding value from bucket i
  *
  * @param key Pointer to the key to store
  * @param i Bucket index
@@ -490,7 +490,7 @@ static bool _try_del_from_bucket(cuckoo_hashtable_t* h,
 
 
 /**
- * @brief internal of cuckoo_find
+ * @brief Internal implementation of cuckoo_find
  *
  * @param key
  * @param val
