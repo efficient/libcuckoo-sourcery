@@ -1,5 +1,4 @@
 SUBDIRS = lib src
-libcuckoo_la_CPPFLAGS = $(DEPS_CFLAGS) -DHAVE_PTHREADS
 CLEANFILES = core *.core *~
 DISTCLEANFILES = autom4te*.cache config.status config.log
 MAINTAINERCLEANFILES = aclocal.m4 install-sh mkinstalldirs \
