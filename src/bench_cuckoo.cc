@@ -125,7 +125,7 @@ int main(int argc, char **argv)
         }
     }
     size_t numkeys = (1 << power) * bucketsize;
-    //numkeys = numkeys*0.959;
+    numkeys = numkeys*0.95;
 
     printf("[bench] power = %zu\n", power);
     printf("[bench] total_keys = %zu  (%.2f M)\n", numkeys, (float) numkeys / MILLION); 

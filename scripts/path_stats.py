@@ -14,11 +14,11 @@ while 1:
     line = file.readline()
     if not line:
         break
-    if line.startswith('cuckoo path length'):
+    if line.startswith('len'):
         length = int(line.split(': ')[1])
         path_len.append(length)
 
-keynum = pow(2,20)*4
+keynum = pow(2,21)*8
 
 pLen = []
 for i in range(0,5):

@@ -46,7 +46,10 @@ static size_t nr = 1 << 25;
 static cuckoo_hashtable_t* table = NULL;
 
 
-static double load_factor[4] = {0.5, 0.9, 0.94, 0.954};
+//static double load_factor[4] = {0.5, 0.9, 0.94, 0.96};
+static double load_factor[2] = {0.001, 0.95};
+
+//static double load_factor[87];
 
 void usage() {
     printf("./bench_setsep [-p #] [-t #] [-r #] [-h]\n");
@@ -64,7 +67,7 @@ typedef struct {
     size_t  puts;
     double  load_start;
     double  load_end;
-    bool*    is_write;
+    bool*   is_write;
     int     cpu;
 } thread_param;
 
@@ -94,7 +97,7 @@ void* exec_thread(void* p) {
     size_t w = nr / nt;
     bool* is_write = tp->is_write + w * tp->tid;
     size_t k = rng() % w;
-
+    
     double ts = time_now();
     while(i_w <= numkeys_write_end) {
         if (is_write[k] == true) {
@@ -113,18 +116,23 @@ void* exec_thread(void* p) {
             KeyType key = (KeyType) (i_r + numkeys_read_start);
             ValType val;
             cuckoo_status st  = cuckoo_find(table, (const char*) &key, (char*) & val);
+            //if (val != key*2-1) {
+            //    printf("read wrong value for key %d\n",key);
+            //    break;
+            //}
             tp->gets++;
         }
         k = (k + 1) % w;
     }
+
     tp->time = time_now() - ts;
     tp->tput = (float) (tp->gets + tp->puts) / tp->time;
-
-    printf("[bench] %d num_inserted = %zu\n", tp->tid, tp->puts);
-    printf("[bench] %d num_lookup = %zu\n", tp->tid, tp->gets);
-    printf("[bench] %d execute_time = %.2f seconds\n", tp->tid, tp->time );
+    
+    //printf("[bench] %d num_inserted = %zu\n", tp->tid, tp->puts);
+    //printf("[bench] %d num_lookup = %zu\n", tp->tid, tp->gets);
+    //printf("[bench] %d execute_time = %.2f seconds\n", tp->tid, tp->time );
     printf("[bench] %d request_tput = %.2f MOPS\n", tp->tid, tp->tput / MILLION);
-
+    
     pthread_exit(NULL);
 }
 
@@ -151,17 +159,21 @@ int main(int argc, char **argv)
             exit(-1);
         }
     }
+
+    //for(int i=0; i<87; i++)
+    //    load_factor[i] = 0.1 + i*0.01;
+
     size_t totalkeys = (1 << power) * bucketsize;
     size_t numkeys = totalkeys * load_factor[0];
-
+    
     printf("[bench] power = %zu\n", power);
     printf("[bench] total_keys = %zu  (%.2f M)\n", totalkeys, (float) totalkeys / MILLION); 
     printf("[bench] key_size = %zu bits\n", sizeof(KeyType) * 8);
     printf("[bench] value_size = %zu bits\n", sizeof(ValType) * 8);
     printf("------------------------------\n");
-
+    
     table = cuckoo_init(power);
-
+    
     printf("[bench] inserting keys to the hash table\n");
 
     size_t ninserted = numkeys;
@@ -178,16 +190,19 @@ int main(int argc, char **argv)
         }
     }
 
-    double td = time_now() - ts;
+    //cuckoo_dump(table);
 
+    /*
+    double td = time_now() - ts;
+    
     printf("[bench] num_inserted = %zu\n", ninserted );
     printf("[bench] insert_time = %.2f seconds\n", td );
     printf("[bench] insert_tput = %.2f MOPS\n", ninserted / td / MILLION);
 
     cuckoo_report(table);
-
+    */
     std::mt19937_64 rng;
-    rng.seed(1234567);
+    rng.seed(123456);
     std::uniform_real_distribution<double> distribution(0.0, 1.0);
     bool* is_write = new bool[nr];
     for (size_t i = 0; i < nr; i++) {
@@ -219,7 +234,7 @@ int main(int argc, char **argv)
             tp[i].load_start = load_factor[l];
             tp[i].load_end = load_factor[l+1];
 #ifdef __linux__
-            int c = i;//2 * i + 1 ; //assign_core(i);
+            int c = i; //2 * i + 1 ; //assign_core(i);
             cpu_set_t cpuset;
             CPU_ZERO(&cpuset);
             CPU_SET(c, &cpuset);
