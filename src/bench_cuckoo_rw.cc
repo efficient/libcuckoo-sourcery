@@ -46,8 +46,8 @@ static size_t nr = 1 << 25;
 static cuckoo_hashtable_t* table = NULL;
 
 
-//static double load_factor[4] = {0.5, 0.9, 0.94, 0.96};
-static double load_factor[2] = {0.001, 0.95};
+static double load_factor[4] = {0.5, 0.9, 0.94, 0.96};
+//static double load_factor[2] = {0.001, 0.95};
 
 //static double load_factor[87];
 
