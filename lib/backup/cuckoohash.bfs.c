@@ -506,7 +506,7 @@ static cuckoo_status _cuckoo_find(cuckoo_hashtable_t* h,
                                   size_t i2) {
     bool result;
 
-    uint32_t vs1, vs2, ve1, ve2;
+    VersionType vs1, vs2, ve1, ve2;
 TryRead:
     start_read_counter2(h, i1, i2, vs1, vs2);
 
@@ -553,8 +553,8 @@ static cuckoo_status _cuckoo_find_key(cuckoo_hashtable_t* h,
                                       const char *key,
                                       size_t i1,
                                       size_t i2,
-                                      uint32_t *v1,
-                                      uint32_t *v2) {
+                                      VersionType *v1,
+                                      VersionType *v2) {
 TryRead:
     start_read_counter2(h, i1, i2, *v1, *v2);
 
@@ -713,8 +713,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     size_t i1   = _index_hash(h, hv);
     size_t i2   = _alt_index(h, hv, i1);
 
-    uint32_t vs1 = 0;
-    uint32_t vs2 = 0;
+    VersionType vs1, vs2;
     cuckoo_status st = _cuckoo_find_key(h, key, i1, i2, &vs1, &vs2);
     if  (st == ok) {
         //printf("key duplicated\n");
@@ -724,7 +723,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i1, j)) {
             mutex_lock(&h->lock);
-            uint32_t ve1, ve2;
+            VersionType ve1, ve2;
             start_read_counter2(h, i1, i2, ve1, ve2);
             if (((vs1 != ve1) || (vs2 != ve2))) {
                 if (_key_in_bucket(h, key, i1, i2)) {
@@ -748,7 +747,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i2, j)) {
             mutex_lock(&h->lock);            
-            uint32_t ve1, ve2;
+            VersionType ve1, ve2;
             start_read_counter2(h, i1, i2, ve1, ve2);
             if (((vs1 != ve1) || (vs2 != ve2))) {
                 if (_key_in_bucket(h, key, i1, i2)) {
@@ -787,7 +786,7 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
 
         mutex_lock(&h->lock);
 
-        uint32_t ve1, ve2;
+        VersionType ve1, ve2;
         start_read_counter2(h, i1, i2, ve1, ve2);
         if (((vs1 != ve1) || (vs2 != ve2))) {
             if (_key_in_bucket(h, key, i1, i2)) {

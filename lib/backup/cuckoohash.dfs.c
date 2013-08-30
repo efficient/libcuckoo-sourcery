@@ -426,7 +426,7 @@ static cuckoo_status _cuckoo_find(cuckoo_hashtable_t* h,
                                   size_t i2) {
     bool result;
 
-    uint32_t vs1, vs2, ve1, ve2;
+    VersionType vs1, vs2, ve1, ve2;
 TryRead:
     start_read_counter2(h, i1, i2, vs1, vs2);
 
@@ -446,6 +446,43 @@ TryRead:
     }
 
     if (result) {
+        return ok;
+    } else {
+        return failure_key_not_found;
+    }
+}
+
+static bool _key_in_bucket(cuckoo_hashtable_t* h,
+                           const char *key,
+                           size_t i1,
+                           size_t i2) {
+    for (size_t j = 0; j < bucketsize; j++) {
+        if (keycmp((char*) &TABLE_KEY(h, i1, j), key)) {
+            return true;
+        }
+    }
+    for (size_t j = 0; j < bucketsize; j++) {
+        if (keycmp((char*) &TABLE_KEY(h, i2, j), key)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static cuckoo_status _cuckoo_find_key(cuckoo_hashtable_t* h,
+                                      const char *key,
+                                      size_t i1,
+                                      size_t i2,
+                                      VersionType *v1,
+                                      VersionType *v2) {
+TryRead:
+    start_read_counter2(h, i1, i2, *v1, *v2);
+
+    if (((*v1 & 1) || (*v2 & 1) )) {
+        goto TryRead;
+    }
+
+    if (_key_in_bucket(h, key, i1, i2)) {
         return ok;
     } else {
         return failure_key_not_found;
@@ -595,8 +632,8 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     size_t i1   = _index_hash(h, hv);
     size_t i2   = _alt_index(h, hv, i1);
 
-    ValType oldval;
-    cuckoo_status st = _cuckoo_find(h, key, (char*) &oldval, i1, i2);
+    VersionType vs1, vs2;
+    cuckoo_status st = _cuckoo_find_key(h, key, i1, i2, &vs1, &vs2);
     if  (st == ok) {
         return failure_key_duplicated;
     }
@@ -604,6 +641,14 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i1, j)) {
             mutex_lock(&h->lock);
+            VersionType ve1, ve2;
+            start_read_counter2(h, i1, i2, ve1, ve2);
+            if (((vs1 != ve1) || (vs2 != ve2))) {
+                if (_key_in_bucket(h, key, i1, i2)) {
+                    mutex_unlock(&h->lock);
+                    return failure_key_duplicated;
+                }
+            }
             if(_try_add_to_slot(h,key,val,i1,j)){
                 if (h->expanding) {
                     _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
@@ -619,6 +664,14 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i2, j)) {
             mutex_lock(&h->lock);
+            VersionType ve1, ve2;
+            start_read_counter2(h, i1, i2, ve1, ve2);
+            if (((vs1 != ve1) || (vs2 != ve2))) {
+                if (_key_in_bucket(h, key, i1, i2)) {
+                    mutex_unlock(&h->lock);
+                    return failure_key_duplicated;
+                }
+            }
             if(_try_add_to_slot(h,key,val,i2,j)){
                 if (h->expanding) {
                     _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
@@ -655,11 +708,20 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
         size_t idx = 0;
 
         int depth = _cuckoopath_search(h, cuckoo_path, &idx, &num_kicks);
-
-        if (depth < 0) {
+        if (depth < 0)
             break;
-        }
+
         mutex_lock(&h->lock);
+
+        VersionType ve1, ve2;
+        start_read_counter2(h, i1, i2, ve1, ve2);
+        if (((vs1 != ve1) || (vs2 != ve2))) {
+            if (_key_in_bucket(h, key, i1, i2)) {
+                mutex_unlock(&h->lock);
+                return failure_key_duplicated;
+            }
+        }
+
         int curr_depth = _cuckoopath_move(h, cuckoo_path, depth, idx);
         if (curr_depth == 0) {
             //printf("cuckoo path length: %d\n", depth);

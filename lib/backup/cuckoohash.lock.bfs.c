@@ -547,7 +547,7 @@ static cuckoo_status _cuckoo_find(cuckoo_hashtable_t* h,
                                   size_t i2) {
     bool result;
 
-    uint32_t vs1, vs2, ve1, ve2;
+    VersionType vs1, vs2, ve1, ve2;
 TryRead:
     start_read_counter2(h, i1, i2, vs1, vs2);
 
