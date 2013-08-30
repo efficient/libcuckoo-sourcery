@@ -7,7 +7,7 @@
  *
  * @brief  implementation of multi-writer/multi-reader cuckoo hash
  *
- * @note   Per-bucket fine-grained spinlock
+ * @note   Per-bucket fine-grained spinlock, lock before looking for a cuckoo path
  *
  */
 
@@ -288,7 +288,6 @@ void init_queue(queue *q)
 {
     q->first = 0;
     q->last = MAX_CUCKOO_COUNT-1;
-
 }
 
 static void enqueue(queue *q, b_slot x)
@@ -459,6 +458,40 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
     return depth;
 
 }
+
+static bool _run_cuckoo(cuckoo_hashtable_t* h,
+                        size_t i1,
+                        size_t i2,
+                        size_t* i,
+                        size_t* j) {
+
+    static __thread CuckooRecord* cuckoo_path = NULL;
+    if (!cuckoo_path) {
+        cuckoo_path = malloc(MAX_BFS_DEPTH * sizeof(CuckooRecord));
+        if(!cuckoo_path) {
+            fprintf(stderr, "Failed to init cuckoo path.\n");
+            return -1;
+        }
+    }
+
+    while (1) {
+        size_t num_kicks = 0;
+
+        int depth = _cuckoopath_search_bfs(h, cuckoo_path, i1, i2, &num_kicks);
+        if (depth < 0) {
+            break;
+        }
+
+        int curr_depth = _cuckoopath_move(h, cuckoo_path, depth, i1, i2);
+        if (curr_depth == 0) {
+            *i = cuckoo_path[0].bucket;
+            *j = cuckoo_path[0].slot;
+            return true;
+        }
+    }
+    return false;
+}
+
 
 /**
  * @brief Try to read bucket i and check if the given key is there
@@ -646,6 +679,39 @@ static cuckoo_status _cuckoo_find_key(cuckoo_hashtable_t* h,
     }
 }
 
+static cuckoo_status _cuckoo_insert(cuckoo_hashtable_t* h,
+                                    const char* key,
+                                    const char* val,
+                                    size_t i1,
+                                    size_t i2) {
+
+    /*
+     * try to add new key to bucket i1 first, then try bucket i2
+     */
+    if (_try_add_to_bucket(h, key, val, i1))
+        return ok;
+    if (_try_add_to_bucket(h, key, val, i2))
+        return ok;
+
+    /*
+     * we are unlucky, so let's perform cuckoo hashing
+     */
+    size_t i = 0, j = 0;
+
+    if (_run_cuckoo(h, i1, i2, &i, &j)) {
+        if (_try_add_to_slot(h, key, val, i, j)) {
+            return ok;
+        }
+    }
+
+    DBG("hash table is full (hashpower = %zu, hash_items = %zu, load factor = %.2f), need to increase hashpower\n",
+        h->hashpower, h->hashitems, 1.0 * h->hashitems / bucketsize / hashsize(h->hashpower));
+
+
+    return failure_table_full;
+
+}
+
 
 static cuckoo_status _cuckoo_delete(cuckoo_hashtable_t* h,
                                     const char* key,
@@ -790,109 +856,24 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
     size_t i1   = _index_hash(h, hv);
     size_t i2   = _alt_index(h, hv, i1);
 
-    VersionType vs1, vs2;
-    cuckoo_status st = _cuckoo_find_key(h, key, i1, i2, &vs1, &vs2);
-    if  (st == ok) {
-        //printf("key duplicated\n");
-        return failure_key_duplicated;
-    }
+    lock2(h, i1, i2);
 
-    for (size_t j = 0; j < bucketsize; j++) {
-        if (is_slot_empty(h, i1, j)) {
-            lock2(h, i1, i2);
-            VersionType ve1, ve2;
-            start_read_counter2(h, i1, i2, ve1, ve2);
-            if (((vs1 != ve1) || (vs2 != ve2))) {
-                if (_key_in_bucket(h, key, i1, i2)) {
-                    unlock2(h, i1, i2);
-                    return failure_key_duplicated;
-                }                
-            }    
-            if(_try_add_to_slot(h,key,val,i1,j)){
-                if (h->expanding) {
-                    _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
-                }
-                unlock2(h, i1, i2);
-                //printf("cuckoo path length: 0\n");
-                return ok;
-            }
-            unlock2(h, i1, i2);
-            break;
-        }
-    }    
-
-    for (size_t j = 0; j < bucketsize; j++) {
-        if (is_slot_empty(h, i2, j)) {
-            lock2(h, i1, i2);
-            VersionType ve1, ve2;
-            start_read_counter2(h, i1, i2, ve1, ve2);
-            if (((vs1 != ve1) || (vs2 != ve2))) {
-                if (_key_in_bucket(h, key, i1, i2)) {
-                    unlock2(h, i1, i2);
-                    return failure_key_duplicated;
-                }                
-            }
-            if(_try_add_to_slot(h,key,val,i2,j)){
-                if (h->expanding) {
-                    _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
-                }
-                unlock2(h, i1, i2);
-                return ok;
-            }
-            unlock2(h,i1, i2);
-            break;
-        }
-    }
-    
-    static __thread CuckooRecord* cuckoo_path = NULL;
-    if (!cuckoo_path) { 
-        cuckoo_path = malloc(MAX_BFS_DEPTH * sizeof(CuckooRecord));
-        if (!cuckoo_path) {
-            fprintf(stderr, "Failed to init cuckoo path.\n");
-            return failure;
-        }
-    }
-
-    while(1){
-        size_t num_kicks = 0;
-        int depth = _cuckoopath_search_bfs(h, cuckoo_path, i1, i2, &num_kicks);
-        if (depth < 0)
-            break;
-
-        lock2(h, i1, i2);
-        VersionType ve1, ve2;
-        start_read_counter2(h, i1, i2, ve1, ve2);
-        if (((vs1 != ve1) || (vs2 != ve2))) {
-            if (_key_in_bucket(h, key, i1, i2)) {
-                unlock2(h, i1, i2);
-                return failure_key_duplicated;
-            }
-        }
-
-        int curr_depth = _cuckoopath_move(h, cuckoo_path, depth, i1, i2);
-        if (curr_depth == 0) {
-            //printf("cuckoo path length: %d\n", depth);
-            size_t i = cuckoo_path[0].bucket;
-            size_t j = cuckoo_path[0].slot;
-            if (_try_add_to_slot(h, key, val, i, j)) {
-                st = ok;
-            }
-            if (h->expanding) {
-                //
-                // still some work to do before releasing the lock
-                //
-                _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
-            }
-            unlock2(h, i1, i2);
-            break;
-        }
+    if (_key_in_bucket(h, key, i1, i2)) {
         unlock2(h, i1, i2);
+        return failure_key_duplicated;
+    }                
+
+    cuckoo_status st = _cuckoo_insert(h, key, val, i1, i2);
+
+    if (h->expanding) {
+        //
+        // still some work to do before releasing the lock
+        //
+        _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
     }
-    if(st != ok) {      
-        DBG("hash table is full (hashpower = %zu), need to increase hashpower\n",
-            h->hashpower);
-        st = failure_table_full;
-    }
+
+    unlock2(h, i1, i2);
+
     return st;
 }
 
