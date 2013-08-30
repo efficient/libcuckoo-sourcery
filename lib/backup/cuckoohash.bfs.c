@@ -32,61 +32,61 @@ Bucket;
 #define unlikely(x)   __builtin_expect((x), 0)
 
 /**
- *  @brief read the counter, ensured by x86 memory ordering model
+ *  @brief Read the counter, ensured by x86 memory ordering model
  *
  */
 #define start_read_counter(h, idx, version)                             \
     do {                                                                \
-        version = *(volatile uint32_t *)(&((uint32_t*) h->counters)[idx & counter_mask]); \
+        version = *(volatile VersionType*)(&((VersionType*) h->counters)[idx & counter_mask]); \
         reorder_barrier();                                              \
     } while(0)
 
 #define end_read_counter(h, idx, version)                               \
     do {                                                                \
         reorder_barrier();                                              \
-        version = *(volatile uint32_t *)(&((uint32_t*) h->counters)[idx & counter_mask]); \
+        version = *(volatile VersionType*)(&((VersionType*) h->counters)[idx & counter_mask]); \
     } while (0)
 
 
 #define start_read_counter2(h, i1, i2, v1, v2)                          \
     do {                                                                \
-        v1 = *(volatile uint32_t *)(&((uint32_t*) h->counters)[i1 & counter_mask]); \
-        v2 = *(volatile uint32_t *)(&((uint32_t*) h->counters)[i2 & counter_mask]); \
+        v1 = *(volatile VersionType*)(&((VersionType*) h->counters)[i1 & counter_mask]); \
+        v2 = *(volatile VersionType*)(&((VersionType*) h->counters)[i2 & counter_mask]); \
         reorder_barrier();                                              \
     } while(0)
 
 #define end_read_counter2(h, i1, i2, v1, v2)                            \
     do {                                                                \
         reorder_barrier();                                              \
-        v1 = *(volatile uint32_t *)(&((uint32_t*) h->counters)[i1 & counter_mask]); \
-        v2 = *(volatile uint32_t *)(&((uint32_t*) h->counters)[i2 & counter_mask]); \
+        v1 = *(volatile VersionType*)(&((VersionType*) h->counters)[i1 & counter_mask]); \
+        v2 = *(volatile VersionType*)(&((VersionType*) h->counters)[i2 & counter_mask]); \
     } while (0)
 
 
 /**
- * @brief Atomic increase the counter
+ * @brief Atomically increase the counter
  *
  */
 #define start_incr_counter(h, idx)                                  \
     do {                                                            \
-        ((volatile uint32_t *)h->counters)[idx & counter_mask]++;   \
+        ((volatile VersionType*)h->counters)[idx & counter_mask]++;   \
         reorder_barrier();                                          \
     } while(0)
 
 #define end_incr_counter(h, idx)                                    \
     do {                                                            \
         reorder_barrier();                                          \
-        ((volatile uint32_t*) h->counters)[idx & counter_mask]++;   \
+        ((volatile VersionType*) h->counters)[idx & counter_mask]++;   \
     } while(0)
 
 
 #define start_incr_counter2(h, i1, i2)                                  \
     do {                                                                \
         if (likely((i1 & counter_mask) != (i2 & counter_mask))) {       \
-            ((volatile uint32_t *)h->counters)[i1 & counter_mask]++;    \
-            ((volatile uint32_t *)h->counters)[i2 & counter_mask]++;    \
+            ((volatile VersionType*)h->counters)[i1 & counter_mask]++;    \
+            ((volatile VersionType*)h->counters)[i2 & counter_mask]++;    \
         } else {                                                        \
-            ((volatile uint32_t *)h->counters)[i1 & counter_mask]++;    \
+            ((volatile VersionType*)h->counters)[i1 & counter_mask]++;    \
         }                                                               \
         reorder_barrier();                                              \
     } while(0)
@@ -95,10 +95,10 @@ Bucket;
     do {                                                                \
         reorder_barrier();                                              \
         if (likely((i1 & counter_mask) != (i2 & counter_mask))) {       \
-            ((volatile uint32_t *)h->counters)[i1 & counter_mask]++;    \
-            ((volatile uint32_t *)h->counters)[i2 & counter_mask]++;    \
+            ((volatile VersionType*)h->counters)[i1 & counter_mask]++;    \
+            ((volatile VersionType*)h->counters)[i2 & counter_mask]++;    \
         } else {                                                        \
-            ((volatile uint32_t *)h->counters)[i1 & counter_mask]++;    \
+            ((volatile VersionType*)h->counters)[i1 & counter_mask]++;    \
         }                                                               \
     } while(0)
 
@@ -404,7 +404,7 @@ static bool _try_read_from_bucket(cuckoo_hashtable_t* h,
 }
 
 /**
- * @brief Try to add key/val to bucket i slot j,
+ * @brief Try to add key/val to bucket i slot j
  *
  * @param key Pointer to the key to store
  * @param val Pointer to the value to store
@@ -434,7 +434,7 @@ static bool _try_add_to_slot(cuckoo_hashtable_t* h,
 } 
 
 /**
- * @brief Try to add key/val to bucket i,
+ * @brief Try to add key/val to bucket i
  *
  * @param key Pointer to the key to store
  * @param val Pointer to the value to store
@@ -463,7 +463,7 @@ static bool _try_add_to_bucket(cuckoo_hashtable_t* h,
 }
 
 /**
- * @brief Try to delete key and its corresponding value from bucket i,
+ * @brief Try to delete key and its corresponding value from bucket i
  *
  * @param key Pointer to the key to store
  * @param i Bucket index
@@ -490,7 +490,7 @@ static bool _try_del_from_bucket(cuckoo_hashtable_t* h,
 
 
 /**
- * @brief internal of cuckoo_find
+ * @brief Internal implementation of cuckoo_find
  *
  * @param key
  * @param val
@@ -661,12 +661,12 @@ cuckoo_hashtable_t* cuckoo_init(const int hashtable_init) {
         fclose(fp);
     }
 
-    h->counters = malloc(counter_size * sizeof(uint32_t));
+    h->counters = malloc(counter_size * sizeof(VersionType));
     if (! h->counters) {
         fprintf(stderr, "Failed to init counter array.\n");
         goto Cleanup;
     }
-    memset(h->counters, 0, counter_size * sizeof(uint32_t));
+    memset(h->counters, 0, counter_size * sizeof(VersionType));
 
     return h;
 

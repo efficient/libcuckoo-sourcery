@@ -32,30 +32,6 @@ typedef enum {
     failure_path_invalid = 8,
 } cuckoo_status;
 
-#define  counter_size  ((uint32_t)1 << (16))
-#define  counter_mask  (counter_size - 1)
-
-/*
- * number of slots per bucket
- */
-#define bucketsize 8
-
-/*
- * The maximum number of cuckoo operations per insert,
- */
-#define MAX_CUCKOO_COUNT 250
-
-/*
- * The max length of the cuckoo path for BFS
- * bucketsize ^ MAX_BFS_DEPTH > MAX_CUCKOO_COUNT / 2
- */
-#define MAX_BFS_DEPTH 4
-
-/*
- * The number of cuckoo paths for DFS
- */
-#define NUM_CUCKOO_PATH 2
-
 /*
  * the structure of a buckoo hash table
  */
