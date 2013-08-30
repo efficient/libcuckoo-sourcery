@@ -32,7 +32,7 @@ typedef enum {
     failure_path_invalid = 8,
 } cuckoo_status;
 
-#define  counter_size  ((uint64_t)1 << (16))
+#define  counter_size  ((uint32_t)1 << (16))
 #define  counter_mask  (counter_size - 1)
 
 /*

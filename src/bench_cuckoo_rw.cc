@@ -106,6 +106,7 @@ void* exec_thread(void* p) {
             cuckoo_status st = cuckoo_insert(table, (const char*) &key, \ 
                                              (const char*) &val);
             if (st != ok) {
+                printf("[bench] %d insert fails, key %d\n", tp->tid, key);
                 break;
             }
             tp->puts++;
@@ -116,10 +117,13 @@ void* exec_thread(void* p) {
             KeyType key = (KeyType) (i_r + numkeys_read_start);
             ValType val;
             cuckoo_status st  = cuckoo_find(table, (const char*) &key, (char*) & val);
-            //if (val != key*2-1) {
-            //    printf("read wrong value for key %d\n",key);
-            //    break;
-            //}
+            if (st != ok) {
+                //printf("[bench] %d read fails, key %d\n", tp->tid, key);
+            }
+            if (val != key*2-1) {
+                printf("[bench] %d read wrong value: key %d value %d\n", tp->tid, key, val);
+                //break;
+            }
             tp->gets++;
         }
         k = (k + 1) % w;
