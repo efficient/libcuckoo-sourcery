@@ -120,7 +120,7 @@ void* exec_thread(void* p) {
             if (st != ok) {
                 //printf("[bench] %d read fails, key %d\n", tp->tid, key);
             }
-            if (val != key*2-1) {
+            else if (val != key*2-1) {
                 printf("[bench] %d read wrong value: key %d value %d\n", tp->tid, key, val);
                 //break;
             }
