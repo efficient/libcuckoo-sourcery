@@ -59,6 +59,8 @@ void usage() {
     printf("\t-h: usage\n");
 }
 
+#define CACHE_LINE_SIZE 64
+
 typedef struct {
     int     tid;
     double  time;
@@ -69,7 +71,7 @@ typedef struct {
     double  load_end;
     bool*   is_write;
     int     cpu;
-} thread_param;
+} __attribute__((aligned (CACHE_LINE_SIZE))) thread_param;
 
 
 void* exec_thread(void* p) {
