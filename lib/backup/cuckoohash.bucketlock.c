@@ -208,12 +208,34 @@ static inline bool dirty2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
     return (dirty(h, i1) || dirty(h, i2));
 }
 
-static inline bool lock2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
-    return (lock(h, i1) && lock(h, i2));
+static inline bool lock2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {    
+    if (i1 < i2) {
+        lock(h, i1);
+        lock(h, i2);
+    }
+    else if (i2 < i1) {
+        lock(h, i2);
+        lock(h, i1);
+    }
+    else {
+        lock(h, i1);
+    }
+    return (BUCKET_LOCK(h, i1) && BUCKET_LOCK(h, i2));
 }
 
 static inline bool lock_except2(cuckoo_hashtable_t* h, size_t i1, size_t i2, size_t ix, size_t iy) {
-    return lock_except(h, i1, ix, iy) && lock_except(h, i2, ix, iy);
+    if (i1 < i2) {
+        lock_except(h, i1, ix, iy);
+        lock_except(h, i2, ix, iy);
+    }
+    else if (i2 < i1) {
+        lock_except(h, i2, ix, iy);
+        lock_except(h, i1, ix, iy);
+    }
+    else {
+        lock_except(h, i1, ix, iy);
+    }
+    return (BUCKET_LOCK(h, i1) && BUCKET_LOCK(h, i2));
 }
 
 static inline void unlock2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
