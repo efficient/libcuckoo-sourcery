@@ -167,28 +167,12 @@ static inline bool lock(cuckoo_hashtable_t* h, size_t i) {
     return locked(h, i);
 }
 
-static inline bool lock_except(cuckoo_hashtable_t* h, size_t i, size_t ix, size_t iy) {
-    if (i == ix || i == iy) {
-        assert(locked(h, i));
-        return locked(h, i);
-    }
-    else
-        return lock(h, i);
-}
-
 static inline void unlock(cuckoo_hashtable_t* h, size_t i) {
     reorder_barrier();
     assert(!dirty(h, i));
     assert(locked(h, i));
     BUCKET_LOCK(h, i) = false;
     reorder_barrier();
-}
-
-static inline void unlock_except(cuckoo_hashtable_t* h, size_t i, size_t ix, size_t iy) {
-    if (i == ix || i == iy)
-        return;
-    else
-        unlock(h, i);
 }
 
 static inline void mark_dirty(cuckoo_hashtable_t* h, size_t i) {
@@ -223,29 +207,9 @@ static inline bool lock2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
     return (BUCKET_LOCK(h, i1) && BUCKET_LOCK(h, i2));
 }
 
-static inline bool lock_except2(cuckoo_hashtable_t* h, size_t i1, size_t i2, size_t ix, size_t iy) {
-    if (i1 < i2) {
-        lock_except(h, i1, ix, iy);
-        lock_except(h, i2, ix, iy);
-    }
-    else if (i2 < i1) {
-        lock_except(h, i2, ix, iy);
-        lock_except(h, i1, ix, iy);
-    }
-    else {
-        lock_except(h, i1, ix, iy);
-    }
-    return (BUCKET_LOCK(h, i1) && BUCKET_LOCK(h, i2));
-}
-
 static inline void unlock2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
     unlock(h, i1);
     unlock(h, i2);
-}
-
-static inline void unlock_except2(cuckoo_hashtable_t* h, size_t i1, size_t i2, size_t ix, size_t iy) {
-    unlock_except(h, i1, ix, iy);
-    unlock_except(h, i2, ix, iy);
 }
 
 static inline void mark_dirty2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
@@ -426,9 +390,7 @@ static int _cuckoopath_search_bfs(cuckoo_hashtable_t* h,
 
 static int _cuckoopath_move(cuckoo_hashtable_t* h,
                             CuckooRecord* cuckoo_path,
-                            size_t depth,
-                            size_t ix,
-                            size_t iy) {
+                            size_t depth) {
 
     CuckooRecord *last   = cuckoo_path + depth;
     if(!is_slot_empty(h, last->bucket, last->slot)) {
@@ -449,7 +411,7 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
         size_t i2 = to->bucket;
         size_t j2 = to->slot;
 
-        lock_except2(h, i1, i2, ix, iy);
+        lock2(h, i1, i2);
 
         /*
          * We plan to kick out j1, but let's check if it is still there;
@@ -458,7 +420,7 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
          */
         if (!keycmp((char*) &TABLE_KEY(h, i1, j1), (char*) &(from->key))) {
             /* try again */
-            unlock_except2(h, i1, i2, ix, iy);
+            unlock2(h, i1, i2);
             return depth;
         }
 
@@ -473,7 +435,7 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
 
         mark_clean2(h, i1, i2);
 
-        unlock_except2(h, i1, i2, ix, iy);
+        unlock2(h, i1, i2);
 
         depth --;
     }
@@ -881,19 +843,19 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
         if (depth < 0)
             break;
 
-        lock2(h, i1, i2);
-        VersionType ve1, ve2;
-        start_read_counter2(h, i1, i2, ve1, ve2);
-        if (((vs1 != ve1) || (vs2 != ve2))) {
-            if (_key_in_bucket(h, key, i1, i2)) {
-                unlock2(h, i1, i2);
-                return failure_key_duplicated;
-            }
-        }
-
-        int curr_depth = _cuckoopath_move(h, cuckoo_path, depth, i1, i2);
+        int curr_depth = _cuckoopath_move(h, cuckoo_path, depth);
         if (curr_depth == 0) {
             //printf("cuckoo path length: %d\n", depth);
+            lock2(h, i1, i2);
+            VersionType ve1, ve2;
+            start_read_counter2(h, i1, i2, ve1, ve2);
+            if (((vs1 != ve1) || (vs2 != ve2))) {
+                if (_key_in_bucket(h, key, i1, i2)) {
+                    unlock2(h, i1, i2);
+                    return failure_key_duplicated;
+                }
+            }
+
             size_t i = cuckoo_path[0].bucket;
             size_t j = cuckoo_path[0].slot;
             if (_try_add_to_slot(h, key, val, i, j)) {
@@ -908,7 +870,6 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
             unlock2(h, i1, i2);
             break;
         }
-        unlock2(h, i1, i2);
     }
     if(st != ok) {      
         DBG("hash table is full (hashpower = %zu), need to increase hashpower\n",
