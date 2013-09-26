@@ -7,7 +7,7 @@
  *
  * @brief  implementation of single-writer/multi-reader cuckoo hash
  *
- * @note   BFS, search for cuckoo path within the lock
+ * @note   BFS, lock before searching for a cuckoo path
  *
  */
 

@@ -7,7 +7,7 @@
  *
  * @brief  implementation of multi-writer/multi-reader cuckoo hash
  *
- * @note   Per-bucket fine-grained spinlock
+ * @note   Per-counter fine-grained spinlock
  *
  */
 
@@ -200,7 +200,7 @@ static inline bool lock2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
 }
 
 static inline void unlock2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
-    if ((i1 & counter_mask) !=  (i2 & counter_mask)) {
+    if (likely((i1 & counter_mask) !=  (i2 & counter_mask))) {
         unlock(h, i1);
         unlock(h, i2);
     }
