@@ -7,7 +7,7 @@
  *
  * @brief  implementation of multi-writer/multi-reader cuckoo hash
  *
- * @note   BFS version
+ * @note   Per-counter fine-grained spinlock
  *
  */
 
@@ -28,6 +28,7 @@ typedef struct {
 Bucket;
 
 #define reorder_barrier() __asm__ __volatile__("" ::: "memory")
+#define relax_fence() __asm__ __volatile__("pause" : : : "memory")
 #define likely(x)     __builtin_expect((x), 1)
 #define unlikely(x)   __builtin_expect((x), 0)
 
@@ -37,29 +38,29 @@ Bucket;
  */
 #define start_read_counter(h, idx, version)                             \
     do {                                                                \
-        version = *(volatile VersionType*)(&((VersionType*) h->counters)[idx & counter_mask]); \
+        version = *(volatile VersionType *)(&((VersionType*) h->counters)[idx & counter_mask]); \
         reorder_barrier();                                              \
     } while(0)
 
 #define end_read_counter(h, idx, version)                               \
     do {                                                                \
         reorder_barrier();                                              \
-        version = *(volatile VersionType*)(&((VersionType*) h->counters)[idx & counter_mask]); \
+        version = *(volatile VersionType *)(&((VersionType*) h->counters)[idx & counter_mask]); \
     } while (0)
 
 
 #define start_read_counter2(h, i1, i2, v1, v2)                          \
     do {                                                                \
-        v1 = *(volatile VersionType*)(&((VersionType*) h->counters)[i1 & counter_mask]); \
-        v2 = *(volatile VersionType*)(&((VersionType*) h->counters)[i2 & counter_mask]); \
+        v1 = *(volatile VersionType *)(&((VersionType*) h->counters)[i1 & counter_mask]); \
+        v2 = *(volatile VersionType *)(&((VersionType*) h->counters)[i2 & counter_mask]); \
         reorder_barrier();                                              \
     } while(0)
 
 #define end_read_counter2(h, i1, i2, v1, v2)                            \
     do {                                                                \
         reorder_barrier();                                              \
-        v1 = *(volatile VersionType*)(&((VersionType*) h->counters)[i1 & counter_mask]); \
-        v2 = *(volatile VersionType*)(&((VersionType*) h->counters)[i2 & counter_mask]); \
+        v1 = *(volatile VersionType *)(&((VersionType*) h->counters)[i1 & counter_mask]); \
+        v2 = *(volatile VersionType *)(&((VersionType*) h->counters)[i2 & counter_mask]); \
     } while (0)
 
 
@@ -67,26 +68,25 @@ Bucket;
  * @brief Atomically increase the counter
  *
  */
-#define start_incr_counter(h, idx)                                  \
-    do {                                                            \
-        ((volatile VersionType*)h->counters)[idx & counter_mask]++;   \
-        reorder_barrier();                                          \
+#define start_incr_counter(h, idx)                                      \
+    do {                                                                \
+        ((volatile VersionType*) h->counters)[idx & counter_mask] += 2; \
+        reorder_barrier();                                              \
     } while(0)
 
-#define end_incr_counter(h, idx)                                    \
-    do {                                                            \
-        reorder_barrier();                                          \
-        ((volatile VersionType*) h->counters)[idx & counter_mask]++;   \
+#define end_incr_counter(h, idx)                                        \
+    do {                                                                \
+        reorder_barrier();                                              \
+        ((volatile VersionType*) h->counters)[idx & counter_mask] += 2; \
     } while(0)
-
 
 #define start_incr_counter2(h, i1, i2)                                  \
     do {                                                                \
         if (likely((i1 & counter_mask) != (i2 & counter_mask))) {       \
-            ((volatile VersionType*)h->counters)[i1 & counter_mask]++;    \
-            ((volatile VersionType*)h->counters)[i2 & counter_mask]++;    \
+            ((volatile VersionType *)h->counters)[i1 & counter_mask] += 2; \
+            ((volatile VersionType *)h->counters)[i2 & counter_mask] += 2; \
         } else {                                                        \
-            ((volatile VersionType*)h->counters)[i1 & counter_mask]++;    \
+            ((volatile VersionType *)h->counters)[i1 & counter_mask] += 2; \
         }                                                               \
         reorder_barrier();                                              \
     } while(0)
@@ -95,19 +95,19 @@ Bucket;
     do {                                                                \
         reorder_barrier();                                              \
         if (likely((i1 & counter_mask) != (i2 & counter_mask))) {       \
-            ((volatile VersionType*)h->counters)[i1 & counter_mask]++;    \
-            ((volatile VersionType*)h->counters)[i2 & counter_mask]++;    \
+            ((volatile VersionType *)h->counters)[i1 & counter_mask] += 2; \
+            ((volatile VersionType *)h->counters)[i2 & counter_mask] += 2; \
         } else {                                                        \
-            ((volatile VersionType*)h->counters)[i1 & counter_mask]++;    \
+            ((volatile VersionType *)h->counters)[i1 & counter_mask] += 2; \
         }                                                               \
     } while(0)
 
 
-// dga does not thing we need this mfence in end_incr, because
+// dga does not think we need this mfence in end_incr, because
 // the current code will call pthread_mutex_unlock before returning
 // to the caller;  pthread_mutex_unlock is a memory barrier:
 // http://www.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap04.html#tag_04_11
-// __asm__ __volatile("mfence" ::: "memory");                     
+// __asm__ __volatile("mfence" ::: "memory");
 
 
 static inline  uint32_t _hashed_key(const char* key) {
@@ -119,7 +119,6 @@ static inline  uint32_t _hashed_key(const char* key) {
 
 #define tablesize(h)  (hashsize(h->hashpower) * sizeof(Bucket))
 
-
 /**
  * @brief Compute the index of the first bucket
  *
@@ -129,7 +128,7 @@ static inline  uint32_t _hashed_key(const char* key) {
  */
 static inline size_t _index_hash(cuckoo_hashtable_t* h,
                                  const uint32_t hv) {
-//    return  (hv >> (32 - h->hashpower));
+//  return  (hv >> (32 - h->hashpower));
     return  (hv & hashmask(h->hashpower));
 }
 
@@ -149,22 +148,65 @@ static inline size_t _alt_index(cuckoo_hashtable_t* h,
     //uint32_t tag = hv & 0xFF;
     uint32_t tag = (hv >> 24) + 1; // ensure tag is nonzero for the multiply
     return (index ^ (tag * 0x5bd1e995)) & hashmask(h->hashpower);
-    //size_t alt = (index ^ (tag * 0x5bd1e995)) & hashmask(h->hashpower);
-    //alt = (alt ^ ((alt == index) * 0x123456)) & hashmask(h->hashpower);
 }
-
 
 #define TABLE_KEY(h, i, j) ((Bucket*) h->buckets)[i].keys[j]
 #define TABLE_VAL(h, i, j) ((Bucket*) h->buckets)[i].vals[j]
+#define V_LOCK(h, i) ((VersionType*) h->counters)[i & counter_mask] & 1
+#define VERSION(h, i) ((VersionType*) h->counters)[i & counter_mask]
 
 #define SLOT_CLEAN(h, i, j)                     \
     do {                                        \
         TABLE_KEY(h, i, j) = 0;                 \
     } while(0)
 
-#define IS_SLOT_AVAILABLE(h, i, j)   (TABLE_KEY(h, i, j) == 0)
+#define IS_SLOT_AVAILABLE(h, i, j) (TABLE_KEY(h, i, j) == 0)
 
+static inline bool lock(cuckoo_hashtable_t* h, size_t i) {
+    VersionType expected = VERSION(h, i);
+    while(1) {
+        if(!(expected & 1) &&
+           __sync_bool_compare_and_swap(&VERSION(h, i), expected, expected | 1))
+            break;
+        relax_fence();
+        expected = VERSION(h, i);
+    }
+    assert(!(VERSION(h, i) & 2));
+    reorder_barrier();
+    return V_LOCK(h, i);
+}
 
+static inline void unlock(cuckoo_hashtable_t* h, size_t i) {
+    reorder_barrier();
+    assert(!(VERSION(h, i) & 2));
+    assert(V_LOCK(h, i));
+    VERSION(h, i) = VERSION(h, i) & (~1);
+    reorder_barrier();
+}
+
+static inline bool lock2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
+    if ((i1 & counter_mask) < (i2 & counter_mask)) {
+        lock(h, i1);
+        lock(h, i2);
+    }
+    else if ((i2 & counter_mask) < (i1 & counter_mask)) {
+        lock(h, i2);
+        lock(h, i1);
+    }
+    else {
+        lock(h, i1);
+    }
+    return (V_LOCK(h, i1) && V_LOCK(h, i2));
+}
+
+static inline void unlock2(cuckoo_hashtable_t* h, size_t i1, size_t i2) {
+    if (likely((i1 & counter_mask) !=  (i2 & counter_mask))) {
+        unlock(h, i1);
+        unlock(h, i2);
+    }
+    else
+        unlock(h, i1);
+}
 
 static inline bool is_slot_empty(cuckoo_hashtable_t* h,
                                  size_t i,
@@ -207,7 +249,6 @@ typedef struct {
     b_slot slots[MAX_CUCKOO_COUNT+1];
     int first;
     int last;
-    //int count;
 } __attribute__((__packed__))
 queue;
 
@@ -250,10 +291,10 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
     while ((*num_kicks < MAX_CUCKOO_COUNT)) {
         b_slot x = dequeue(&bucket_q);
         size_t i = x.bucket;
-        
+
         uint32_t hv_next = _hashed_key((char*) &TABLE_KEY(h, i, r));
         size_t bucket_child_next = _alt_index(h, hv_next, i);
-        
+
         for (int k = 0; k < bucketsize; k++) {
             size_t j = (r+k) % bucketsize;
 
@@ -269,7 +310,7 @@ static b_slot _slot_search_bfs(cuckoo_hashtable_t* h,
 
             b_slot y = {.bucket=bucket_child, .depth=x.depth+1,\
                         .pathcode = x.pathcode * bucketsize + j};
-            
+
             for (int m = 0; m < bucketsize; m++) {
                 size_t j = (r+m) % bucketsize;
                 if (is_slot_empty(h, bucket_child, j)) {
@@ -352,6 +393,8 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
         size_t i2 = to->bucket;
         size_t j2 = to->slot;
 
+        lock2(h, i1, i2);
+
         /*
          * We plan to kick out j1, but let's check if it is still there;
          * there's a small chance we've gotten scooped by a later cuckoo.
@@ -359,6 +402,7 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
          */
         if (!keycmp((char*) &TABLE_KEY(h, i1, j1), (char*) &(from->key))) {
             /* try again */
+            unlock2(h, i1, i2);
             return depth;
         }
 
@@ -372,6 +416,8 @@ static int _cuckoopath_move(cuckoo_hashtable_t* h,
         SLOT_CLEAN(h, i1, j1);
 
         end_incr_counter2(h, i1, i2);
+
+        unlock2(h, i1, i2);
 
         depth --;
     }
@@ -419,19 +465,19 @@ static bool _try_add_to_slot(cuckoo_hashtable_t* h,
                              size_t i,
                              size_t j) {
     if (is_slot_empty(h, i, j)) {
-        
+
         start_incr_counter(h, i);
-        
+
         memcpy(&TABLE_KEY(h, i, j), key, sizeof(KeyType));
         memcpy(&TABLE_VAL(h, i, j), val, sizeof(ValType));
-        
+
         end_incr_counter(h, i);
-        h->hashitems++;
+        /* __sync_add_and_fetch(&h->hashitems, 1); */
 
         return true;
     }
     return false;
-} 
+}
 
 /**
  * @brief Try to add key/val to bucket i
@@ -448,14 +494,14 @@ static bool _try_add_to_bucket(cuckoo_hashtable_t* h,
                                size_t i) {
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i, j)) {
-            
+
             start_incr_counter(h, i);
 
             memcpy(&TABLE_KEY(h, i, j), key, sizeof(KeyType));
             memcpy(&TABLE_VAL(h, i, j), val, sizeof(ValType));
 
             end_incr_counter(h, i);
-            h->hashitems++;
+            /* __sync_add_and_fetch(&h->hashitems, 1); */
             return true;
         }
     }
@@ -481,7 +527,7 @@ static bool _try_del_from_bucket(cuckoo_hashtable_t* h,
             SLOT_CLEAN(h, i, j);
             end_incr_counter(h, i);
 
-            h->hashitems --;
+            /* __sync_sub_and_fetch(&h->hashitems, 1); */
             return true;
         }
     }
@@ -510,7 +556,7 @@ static cuckoo_status _cuckoo_find(cuckoo_hashtable_t* h,
 TryRead:
     start_read_counter2(h, i1, i2, vs1, vs2);
 
-    if (((vs1 & 1) || (vs2 & 1) )) {
+    if (((vs1 & 2) || (vs2 & 2) )) {
         goto TryRead;
     }
 
@@ -521,7 +567,7 @@ TryRead:
 
     end_read_counter2(h, i1, i2, ve1, ve2);
 
-    if (((vs1 != ve1) || (vs2 != ve2))) {
+    if (((vs1|1) != (ve1|1)) || ((vs2|1) != (ve2|1))) {
         goto TryRead;
     }
 
@@ -558,7 +604,7 @@ static cuckoo_status _cuckoo_find_key(cuckoo_hashtable_t* h,
 TryRead:
     start_read_counter2(h, i1, i2, *v1, *v2);
 
-    if (((*v1 & 1) || (*v2 & 1) )) {
+    if (((*v1 & 2) || (*v2 & 2) )) {
         goto TryRead;
     }
 
@@ -699,7 +745,7 @@ cuckoo_status cuckoo_find(cuckoo_hashtable_t* h,
     cuckoo_status st = _cuckoo_find(h, key, val, i1, i2);
 
     if (st == failure_key_not_found) {
-        //DBG("miss for key %u i1=%zu i2=%zu hv=%u\n", *((KeyType*) key), i1, i2, hv);
+        /* DBG("miss for key %u i1=%zu i2=%zu hv=%u\n", *((KeyType*) key), i1, i2, hv); */
     }
 
     return st;
@@ -722,61 +768,59 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
 
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i1, j)) {
-            mutex_lock(&h->lock);
+            lock2(h, i1, i2);
             VersionType ve1, ve2;
             start_read_counter2(h, i1, i2, ve1, ve2);
-            if (((vs1 != ve1) || (vs2 != ve2))) {
+            if (((vs1|1) != (ve1|1)) || ((vs2|1) != (ve2|1))) {
                 if (_key_in_bucket(h, key, i1, i2)) {
-                    mutex_unlock(&h->lock);
+                    unlock2(h, i1, i2);
                     return failure_key_duplicated;
-                }                
-            }    
+                }
+            }
             if(_try_add_to_slot(h,key,val,i1,j)){
                 if (h->expanding) {
                     _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
                 }
-                mutex_unlock(&h->lock);
+                unlock2(h, i1, i2);
                 //printf("cuckoo path length: 0\n");
                 return ok;
             }
-            mutex_unlock(&h->lock);
+            unlock2(h, i1, i2);
             break;
         }
-    }    
+    }
 
     for (size_t j = 0; j < bucketsize; j++) {
         if (is_slot_empty(h, i2, j)) {
-            mutex_lock(&h->lock);            
+            lock2(h, i1, i2);
             VersionType ve1, ve2;
             start_read_counter2(h, i1, i2, ve1, ve2);
-            if (((vs1 != ve1) || (vs2 != ve2))) {
+            if (((vs1|1) != (ve1|1)) || ((vs2|1) != (ve2|1))) {
                 if (_key_in_bucket(h, key, i1, i2)) {
-                    mutex_unlock(&h->lock);
+                    unlock2(h, i1, i2);
                     return failure_key_duplicated;
-                }                
+                }
             }
             if(_try_add_to_slot(h,key,val,i2,j)){
                 if (h->expanding) {
                     _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
                 }
-                mutex_unlock(&h->lock);
-                //printf("cuckoo path length: 0\n");
+                unlock2(h, i1, i2);
                 return ok;
             }
-            mutex_unlock(&h->lock);
+            unlock2(h,i1, i2);
             break;
         }
     }
-    
+
     static __thread CuckooRecord* cuckoo_path = NULL;
-    if (!cuckoo_path) { 
+    if (!cuckoo_path) {
         cuckoo_path = malloc(MAX_BFS_DEPTH * sizeof(CuckooRecord));
         if (!cuckoo_path) {
             fprintf(stderr, "Failed to init cuckoo path.\n");
             return failure;
         }
     }
-    //memset(cuckoo_path, 0, MAX_BFS_DEPTH * sizeof(CuckooRecord));
 
     while(1){
         size_t num_kicks = 0;
@@ -784,20 +828,19 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
         if (depth < 0)
             break;
 
-        mutex_lock(&h->lock);
-
-        VersionType ve1, ve2;
-        start_read_counter2(h, i1, i2, ve1, ve2);
-        if (((vs1 != ve1) || (vs2 != ve2))) {
-            if (_key_in_bucket(h, key, i1, i2)) {
-                mutex_unlock(&h->lock);
-                return failure_key_duplicated;
-            }
-        }
-
         int curr_depth = _cuckoopath_move(h, cuckoo_path, depth);
         if (curr_depth == 0) {
             //printf("cuckoo path length: %d\n", depth);
+            lock2(h, i1, i2);
+            VersionType ve1, ve2;
+            start_read_counter2(h, i1, i2, ve1, ve2);
+            if (((vs1|1) != (ve1|1)) || ((vs2|1) != (ve2|1))) {
+                if (_key_in_bucket(h, key, i1, i2)) {
+                    unlock2(h, i1, i2);
+                    return failure_key_duplicated;
+                }
+            }
+
             size_t i = cuckoo_path[0].bucket;
             size_t j = cuckoo_path[0].slot;
             if (_try_add_to_slot(h, key, val, i, j)) {
@@ -809,14 +852,13 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
                 //
                 _cuckoo_clean(h, DEFAULT_BULK_CLEAN);
             }
-            mutex_unlock(&h->lock);    
+            unlock2(h, i1, i2);
             break;
         }
-        mutex_unlock(&h->lock);    
     }
-    if(st != ok) {      
-        DBG("hash table is full (hashpower = %zu, hash_items = %zu, load factor = %.2f), need to increase hashpower\n",
-            h->hashpower, h->hashitems, cuckoo_loadfactor(h));
+    if(st != ok) {
+        DBG("hash table is full (hashpower = %zu, load_factor = %f), need to increase hashpower\n",
+            h->hashpower, cuckoo_loadfactor(h));
         st = failure_table_full;
     }
     return st;
@@ -825,15 +867,13 @@ cuckoo_status cuckoo_insert(cuckoo_hashtable_t* h,
 cuckoo_status cuckoo_delete(cuckoo_hashtable_t* h,
                             const char *key) {
 
-    mutex_lock(&h->lock);
-
     uint32_t hv = _hashed_key(key);
     size_t i1   = _index_hash(h, hv);
     size_t i2   = _alt_index(h, hv, i1);
 
+    lock2(h, i1, i2);
     cuckoo_status st = _cuckoo_delete(h, key, i1, i2);
-
-    mutex_unlock(&h->lock);
+    unlock2(h, i1, i2);
 
     return st;
 }
@@ -846,7 +886,7 @@ cuckoo_status cuckoo_expand(cuckoo_hashtable_t* h) {
         //DBG("expansion is on-going\n", NULL);
         return failure_under_expansion;
     }
-    
+
     h->expanding = true;
 
     Bucket* old_buckets = (Bucket*) h->buckets;

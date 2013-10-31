@@ -17,7 +17,7 @@ typedef uint32_t VersionType;
 /*
  * The maximum number of cuckoo operations per insert,
  */
-#define MAX_CUCKOO_COUNT 250
+#define MAX_CUCKOO_COUNT 800
 
 /*
  * The max length of the cuckoo path for BFS

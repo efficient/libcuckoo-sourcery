@@ -138,7 +138,6 @@ void* exec_thread(void* p) {
     //printf("[bench] %d num_lookup = %zu\n", tp->tid, tp->gets);
     //printf("[bench] %d execute_time = %.2f seconds\n", tp->tid, tp->time );
     printf("[bench] %d request_tput = %.2f MOPS\n", tp->tid, tp->tput / MILLION);
-    
     pthread_exit(NULL);
 }
 
