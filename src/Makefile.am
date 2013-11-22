@@ -1,4 +1,4 @@
-noinst_PROGRAMS = test_cuckoo test_cuckoo_mt bench_cuckoo bench_cuckoo_w_mr bench_cuckoo_rw insert_throughput
+noinst_PROGRAMS = test_cuckoo test_cuckoo_mt bench_cuckoo bench_cuckoo_w_mr bench_cuckoo_rw insert_throughput read_throughput
 
 # change glibc_dir to the folder where glibc with TSX lock elision is installed
 #glibc_dir = /home/xiaozhou/Research/build/glibc
@@ -39,6 +39,10 @@ insert_throughput_LDFLAGS = $(ldFlags)
 insert_throughput_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
 insert_throughput_LDADD = $(glibc_ld)
 
+read_throughput_SOURCES = read_throughput.cc
+read_throughput_LDFLAGS = $(ldFlags)
+read_throughput_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
+read_throughput_LDADD = $(glibc_ld)
 
 AM_CFLAGS = -Wall -pthread
 AM_CPPFLAGS = -std=c++0x -I../lib -I$(top_srcdir)/lib

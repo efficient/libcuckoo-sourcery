@@ -29,17 +29,17 @@ extern "C" {
 
 // The power argument passed to the hashtable constructor. This can be
 // set with the command line flag --power.
-size_t power = 19;
+size_t power = 23;
 // The number of threads spawned for inserts. This can be set with the
 // command line flag --thread-num
 size_t thread_num = sysconf(_SC_NPROCESSORS_ONLN);
 // The load factor to fill the table up to before testing throughput.
 // This can be set with the command line flag --begin-load.
-size_t begin_load = 50;
+size_t begin_load = 0;
 // The maximum load factor to fill the table up to when testing
 // throughput. This can be set with the command line flag
 // --end-load.
-size_t end_load = 75;
+size_t end_load = 90;
 // The seed which the random number generator uses. This can be set
 // with the command line flag --seed
 size_t seed = 0;
@@ -113,7 +113,7 @@ public:
         delete threadargs;
         init_size = keys_per_thread * thread_num;
 
-        std::cout << "Table with capacity " << numkeys << " prefilled to a load factor of " << cuckoo_loadfactor(table) << std::endl;
+        std::cout << "Table with capacity " << numkeys << " prefilled to a load factor of " << (double)init_size / numkeys << std::endl;
     }
 
     void TearDown() {
@@ -150,7 +150,7 @@ void TestEverything() {
     size_t num_inserts = keys_per_thread * thread_num;
     // Reports the results
     std::cout << "----------Results----------" << std::endl;
-    std::cout << "Final load factor:\t" << cuckoo_loadfactor(env->table) << std::endl;
+    std::cout << "Final load factor:\t" << (double)(num_inserts + env->init_size) / env->numkeys << std::endl;
     std::cout << "Number of inserts:\t" << num_inserts << std::endl;
     std::cout << "Time elapsed:\t" << elapsed_time << " milliseconds" << std::endl;
     std::cout << "Throughput: " << (double)num_inserts / elapsed_time << " inserts/ms" << std::endl;
