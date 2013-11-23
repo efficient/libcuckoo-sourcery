@@ -233,14 +233,24 @@ public:
     bool find(const key_type& key, mapped_type& val) {
         check_hazard_pointer();
         uint64_t hv = hashed_key(key);
-        TableInfo *ti;
-        size_t i1, i2;
-        snapshot_and_lock_two(hv, ti, i1, i2);
+        TableInfo *ti = snapshot_table_nolock();
+        size_t i1 = index_hash(ti, hv);
+        size_t i2 = alt_index(ti, hv, i1);
 
+    TryRead:
+        const size_t vs1 = ti->counters_[lock_ind(i1)].num.load(std::memory_order_acquire);
+        const size_t vs2 = ti->counters_[lock_ind(i1)].num.load(std::memory_order_acquire);
+        if ((vs1 & 1) || (vs2 & 1)) {
+            goto TryRead;
+        }
         const cuckoo_status st = cuckoo_find(key, val, hv, ti, i1, i2);
-        unlock_two(ti, i1, i2);
-        unset_hazard_pointer();
+        const size_t ve1 = ti->counters_[lock_ind(i1)].num.load(std::memory_order_acquire);
+        const size_t ve2 = ti->counters_[lock_ind(i1)].num.load(std::memory_order_acquire);
+        if ((ve1 != vs1) || (ve2 != vs2)) {
+            goto TryRead;
+        }
 
+        unset_hazard_pointer();
         return (st == ok);
     }
 
@@ -359,7 +369,9 @@ private:
     /* cacheint is a cache-aligned atomic integer type. */
     struct cacheint {
         std::atomic<size_t> num;
-        cacheint() {}
+        cacheint() {
+            num.store(0);
+        }
         cacheint(cacheint&& x) {
             num.store(x.num.load());
         }
@@ -384,6 +396,8 @@ private:
 
         // unique pointer to the array of mutexes
         std::unique_ptr<locktype[]> locks_;
+        // unique pointer to the array of counters
+        std::unique_ptr<cacheint[]> counters_;
 
         // per-core counters for the number of inserts and deletes
         std::vector<cacheint> num_inserts;
@@ -855,10 +869,14 @@ private:
                 return false;
             }
 
+            ti->counters_[lock_ind(tb)].num.fetch_add(1, std::memory_order_release);
             ti->buckets_[tb].keys[ts] = ti->buckets_[fb].keys[fs];
             ti->buckets_[tb].vals[ts] = ti->buckets_[fb].vals[fs];
             ti->buckets_[tb].occupied.set(ts);
+            ti->counters_[lock_ind(tb)].num.fetch_add(1, std::memory_order_release);
+            ti->counters_[lock_ind(fb)].num.fetch_add(1, std::memory_order_release);
             ti->buckets_[fb].occupied.reset(fs);
+            ti->counters_[lock_ind(fb)].num.fetch_add(1, std::memory_order_release);
             if (depth == 1) {
                 // Don't unlock fb or ob, since they are needed in
                 // cuckoo_insert. Only unlock tb if it isn't equal to
@@ -964,9 +982,11 @@ private:
                                      const mapped_type &val, const size_t i,
                                      const size_t j) {
         assert(!ti->buckets_[i].occupied[j]);
+        ti->counters_[lock_ind(i)].num.fetch_add(1, std::memory_order_release);
         ti->buckets_[i].keys[j] = key;
         ti->buckets_[i].vals[j] = val;
         ti->buckets_[i].occupied.set(j);
+        ti->counters_[lock_ind(i)].num.fetch_add(1, std::memory_order_release);
         ti->num_inserts[counterid].num.fetch_add(1, std::memory_order_relaxed);
     }
 
@@ -1006,7 +1026,9 @@ private:
                 continue;
             }
             if (ti->buckets_[i].keys[j] == key) {
+                ti->counters_[lock_ind(i)].num.fetch_add(1, std::memory_order_release);
                 ti->buckets_[i].occupied.reset(j);
+                ti->counters_[lock_ind(i)].num.fetch_add(1, std::memory_order_release);
                 ti->num_deletes[counterid].num.fetch_add(1, std::memory_order_relaxed);
                 return true;
             }
@@ -1022,7 +1044,9 @@ private:
                                   const size_t i) {
         for (size_t j = 0; j < SLOT_PER_BUCKET; j++) {
             if (ti->buckets_[i].occupied[j] && ti->buckets_[i].keys[j] == key) {
+                ti->counters_[lock_ind(i)].num.fetch_add(1, std::memory_order_release);
                 ti->buckets_[i].vals[j] = value;
+                ti->counters_[lock_ind(i)].num.fetch_add(1, std::memory_order_release);
                 return true;
             }
         }
@@ -1163,6 +1187,7 @@ private:
             new_table_info->tablesize_ = sizeof(Bucket) * hashsize(new_table_info->hashpower_);
             new_table_info->buckets_.reset(new Bucket[hashsize(new_table_info->hashpower_)]);
             new_table_info->locks_.reset(new locktype[kNumLocks]);
+            new_table_info->counters_.reset(new cacheint[kNumLocks]);
             new_table_info->num_inserts.resize(kNumCores);
             new_table_info->num_deletes.resize(kNumCores);
         } catch (std::bad_alloc&) {
@@ -1176,7 +1201,8 @@ private:
         return ok;
     }
 
-    /* cuckoo_clear empties the table. */
+    /* cuckoo_clear empties the table and sets the counters to
+     * zero. */
     cuckoo_status cuckoo_clear() {
         check_hazard_pointer();
         TableInfo *ti = snapshot_and_lock_all();
@@ -1186,11 +1212,6 @@ private:
 
         for (size_t i = 0; i < hashsize(ti->hashpower_); i++) {
             ti->buckets_[i].occupied.reset();
-        }
-
-        for (size_t i = 0; i < ti->num_inserts.size(); i++) {
-            ti->num_inserts[i].num.store(0);
-            ti->num_deletes[i].num.store(0);
         }
 
         unlock_all(ti);
