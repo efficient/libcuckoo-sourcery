@@ -37,8 +37,8 @@ size_t power = 23;
 // command line flag --thread-num
 size_t thread_num = sysconf(_SC_NPROCESSORS_ONLN);
 // The load factor to fill the table up to before testing throughput.
-// This can't be set
-size_t partial_load = 50;
+// This can be set with the --load flag
+size_t load = 50;
 // The seed which the random number generator uses. This can be set
 // with the command line flag --seed
 size_t seed = 0;
@@ -123,10 +123,10 @@ public:
             keys[swapind] = i+numkeys;
         }
 
-        // We prefill the table to partial_load with thread_num
+        // We prefill the table to load with thread_num
         // threads, giving each thread enough keys to insert
         std::vector<std::thread> threads;
-        size_t keys_per_thread = numkeys * (partial_load / 100.0) / thread_num;
+        size_t keys_per_thread = numkeys * (load / 100.0) / thread_num;
         for (size_t i = 0; i < thread_num; i++) {
             threads.emplace_back(insert_thread, thread_args{keys.begin()+i*keys_per_thread,
                         keys.begin()+(i+1)*keys_per_thread, std::ref(table), 
@@ -188,10 +188,11 @@ void ReadThroughputTest() {
 }
 
 int main(int argc, char** argv) {
-    const char* args[] = {"--power", "--thread-num", "--time", "--seed"};
-    size_t* arg_vars[] = {&power, &thread_num, &test_len, &seed};
+    const char* args[] = {"--power", "--thread-num", "--load", "--time", "--seed"};
+    size_t* arg_vars[] = {&power, &thread_num, &load, &test_len, &seed};
     const char* arg_help[] = {"The power argument given to the hashtable during initialization",
                               "The number of threads to spawn for each type of operation",
+                              "The load factor to fill the table up to before testing reads",
                               "The number of seconds to run the test for"
                               "The seed used by the random number generator"};
     parse_flags(argc, argv, args, arg_vars, arg_help, sizeof(args)/sizeof(const char*), nullptr, nullptr, nullptr, 0);
