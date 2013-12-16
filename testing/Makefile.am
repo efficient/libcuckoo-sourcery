@@ -1,7 +1,7 @@
 testLDFLAGS = -lpthread -L$(top_srcdir)/lib -lcityhash
 testDEPS = $(top_srcdir)/lib/libcityhash.a
 
-noinst_PROGRAMS = test_insert_and_find.out test_iterator.out stress_checked.out stress_unchecked.out insert_throughput.out read_throughput.out
+noinst_PROGRAMS = test_insert_and_find.out test_iterator.out stress_checked.out stress_unchecked.out insert_throughput.out read_throughput.out example.out
 
 test_insert_and_find_out_SOURCES = test_insert_and_find.cc
 test_insert_and_find_out_LDFLAGS = $(testLDFLAGS)
@@ -26,5 +26,9 @@ insert_throughput_out_DEPENDENCIES = $(testDEPS)
 read_throughput_out_SOURCES = read_throughput.cc
 read_throughput_out_LDFLAGS = $(testLDFLAGS)
 read_throughput_out_DEPENDENCIES = $(testDEPS)
+
+example_out_SOURCES = example.cc
+example_out_LDFLAGS = $(testLDFLAGS)
+example_out_DEPENDENCIES = $(testDEPS)
 
 AM_CPPFLAGS = -I$(top_srcdir)/lib

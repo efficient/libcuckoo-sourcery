@@ -1,3 +1,5 @@
+/*! \file */
+
 #ifndef _CUCKOOHASH_CONFIG_H
 #define _CUCKOOHASH_CONFIG_H
 
@@ -7,7 +9,7 @@
 //! HASHPOWER_DEFAULT is the default hash table size
 #define HASHPOWER_DEFAULT 16
 
-//! set DEBUG to 1 to enable debug output
-#define DEBUG 0
+//! set LIBCUCKOO_DEBUG to 1 to enable debug output
+#define LIBCUCKOO_DEBUG 1
 
 #endif

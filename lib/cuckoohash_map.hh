@@ -21,29 +21,7 @@
 #include <unistd.h>
 
 #include "cuckoohash_config.h"
-#include "util.h"
-#include "city.h"
-
-/*! CityHasher is a std::hash-style wrapper around cityhash. We
- *  encourage using CityHash over the std::hash function if
- *  possible. */
-template <class Key>
-class CityHasher {
-public:
-    size_t operator()(Key k) {
-        return CityHash64((const char*) &k, sizeof(k));
-    }
-};
-
-/*! This is a template specialization of CityHasher for
- *  std::string. */
-template <>
-class CityHasher<std::string> {
-public:
-    size_t operator()(std::string& k) {
-        return CityHash64(k.c_str(), k.size());
-    }
-};
+#include "cuckoohash_util.h"
 
 /*! cuckoohash_map is the hash table class. Its interface resembles
  *  that of STL's unordered_map. The table stores items in a set of
@@ -116,10 +94,10 @@ class cuckoohash_map {
             return ret;
         }
 
-        /* delete_unused scans the list of hazard pointers, deleting any
-         * pointers in old_pointers that aren't in this list. If it does
-         * delete a pointer in old_pointers, it deletes that node from the
-         * list. */
+        /* delete_unused scans the list of hazard pointers, deleting
+         * any pointers in old_pointers that aren't in this list.
+         * If it does delete a pointer in old_pointers, it deletes
+         * that node from the list. */
         template <class Ptr>
         void delete_unused(std::list<Ptr*>& old_pointers) {
             lock_.lock();
@@ -133,7 +111,7 @@ class cuckoohash_map {
                     }
                 }
                 if (deleteable) {
-                    DBG("deleting %p\n", *it);
+                    LIBCUCKOO_DBG("deleting %p\n", *it);
                     delete *it;
                     it = old_pointers.erase(it);
                 } else {
@@ -191,10 +169,10 @@ public:
     typedef Hash              hasher;
     typedef Pred              key_equal;
 
-    /*! The constructor creates a new hash table with the given
-     * hashpower. The number of buckets in the new hash table will be
-     * 2<SUP>hashpower_init</SUP>. If the constructor fails, it will
-     * throw an exception. */
+    /*! The constructor creates a new hash table with a hashpower of
+     * \p hashpower_init. The number of buckets in the new hash table
+     * will be 2<SUP>\p hashpower_init</SUP>. If the constructor fails,
+     * it will throw an exception. */
     explicit cuckoohash_map(size_t hashpower_init = HASHPOWER_DEFAULT) {
         cuckoo_init(hashpower_init);
     }
@@ -271,8 +249,8 @@ public:
         return lf;
     }
 
-    /*! find searches through the table for the given key, and stores
-     * the associated value it finds. */
+    /*! find searches through the table for \p key, and stores
+     * the associated value it finds in \p val. */
     bool find(const key_type& key, mapped_type& val) {
         check_hazard_pointer();
         size_t hv = hashed_key(key);
@@ -303,7 +281,7 @@ public:
     }
 
     /*! insert puts the given key-value pair into the table. It first
-     * checks that the key isn't already in the table, since the table
+     * checks that \p key isn't already in the table, since the table
      * doesn't support duplicate keys. If the table is out of space,
      * insert will automatically expand until it can succeed. Note
      * that expansion can throw an exception, which insert will
@@ -329,7 +307,7 @@ public:
             // the table before trying again.
             if (st == failure_table_full) {
                 if (cuckoo_expand_simple(ti->hashpower_+1) == failure_under_expansion) {
-                    DBG("expansion is on-going\n", NULL);
+                    LIBCUCKOO_DBG("expansion is on-going\n", NULL);
                 }
             }
             snapshot_and_lock_two(hv, ti, i1, i2);
@@ -339,9 +317,9 @@ public:
         return true;
     }
 
-    /*! erase removes the given key and it's associated value from the
-     * table, calling their destructors. If the key is not there, it
-     * returns false. */
+    /*! erase removes \p key and it's associated value from the table,
+     * calling their destructors. If \p key is not there, it returns
+     * false. */
     bool erase(const key_type& key) {
         check_hazard_pointer();
         check_counterid();
@@ -357,8 +335,8 @@ public:
         return (st == ok);
     }
 
-    /*! update changes the value associated with the given key. If the
-     * key is not there, it returns false. */
+    /*! update changes the value associated with \p key to \p val. If
+     * \p key is not there, it returns false. */
     bool update(const key_type& key, const mapped_type& val) {
         check_hazard_pointer();
         size_t hv = hashed_key(key);
@@ -373,13 +351,13 @@ public:
         return (st == ok);
     }
 
-    /*! rehash will size the table using the hashpower specified by n.
-     * Note that the number of buckets in the table will be
-     * 2<SUP>n</SUP> after expansion. If n is not larger than the
-     * current hashpower, then the function does nothing. It returns
-     * true if the table expansion succeeded, and false otherwise.
-     * rehash can throw an exception if the expansion fails to
-     * allocate enough memory for the larger table. */
+    /*! rehash will size the table using a hashpower of \p n. Note
+     * that the number of buckets in the table will be 2<SUP>\p
+     * n</SUP> after expansion. If \p n is not larger than the current
+     * hashpower, then the function does nothing. It returns true if
+     * the table expansion succeeded, and false otherwise. rehash can
+     * throw an exception if the expansion fails to allocate enough
+     * memory for the larger table. */
     bool rehash(size_t n) {
         check_hazard_pointer();
         TableInfo* ti = snapshot_table_nolock();
@@ -392,9 +370,9 @@ public:
     }
 
     /*! reserve will size the table to hold at least enough elements
-     * as specified by n. If the table can already hold that many
+     * as specified by \p n. If the table can already hold that many
      * elements, the function has no effect. Otherwise, the function
-     * will expand the table to a hashpower sufficient to hold n
+     * will expand the table to a hashpower sufficient to hold \p n
      * elements. It will return true if there was an expansion, and
      * false otherwise. reserve can throw an exception if the
      * expansion fails to allocate enough memory for the larger
@@ -1304,8 +1282,8 @@ private:
         }
 
         assert(st == failure);
-        DBG("hash table is full (hashpower = %zu, hash_items = %zu, load factor = %.2f), need to increase hashpower\n",
-            ti->hashpower_, cuckoo_size(ti), cuckoo_loadfactor(ti));
+        LIBCUCKOO_DBG("hash table is full (hashpower = %zu, hash_items = %zu, load factor = %.2f), need to increase hashpower\n",
+                      ti->hashpower_, cuckoo_size(ti), cuckoo_loadfactor(ti));
         return failure_table_full;
     }
 
@@ -1473,15 +1451,17 @@ public:
      * other threads can modify the table while the iterator is in
      * use. Note that this also means that only one iterator can be
      * active on a table at one time and furthermore that all
-     * operations on the table, except the size, empty, hashpower,
-     * bucket_count, and load_factor methods, will stall until the
-     * iterator loses its lock. The iterator allows movement forward
-     * and backward through the table as well as dereferencing items
-     * in the table. It maintains the invariant that the iterator is
-     * either an end iterator (which points past the end of the
-     * table), or points to a filled slot. As soon as the iterator
-     * looses its lock on the table, all operations will throw an
-     * exception. */
+     * operations on the table, except the \ref size, \ref empty, \ref
+     * hashpower, \ref bucket_count, and \ref load_factor methods,
+     * will stall until the iterator loses its lock. For this reason,
+     * we suggest using the \ref snapshot_table method if possible,
+     * since it is less error-prone. The iterator allows movement
+     * forward and backward through the table as well as dereferencing
+     * items in the table. It maintains the invariant that the
+     * iterator is either an end iterator (which points past the end
+     * of the table), or points to a filled slot. As soon as the
+     * iterator looses its lock on the table, all dereference and
+     * movement operations will throw an exception. */
     class const_iterator {
         /* The constructor locks the entire table, retrying until
          * snapshot_and_lock_all succeeds. Then it calculates end_pos
@@ -1517,9 +1497,9 @@ public:
     public:
 
         /*! This is an rvalue-reference constructor that takes the
-        lock from the argument and copies its state. To create an
-        iterator from scratch, call the cbegin or cend methods of
-        cuckoohash_map. */
+          lock from \p it and copies its state. To create an iterator
+          from scratch, call the \ref cbegin or \ref cend methods of
+          cuckoohash_map. */
         const_iterator(const_iterator&& it) {
             if (this == &it) {
                 return;
@@ -1551,7 +1531,7 @@ public:
             }
         }
 
-        /*! The destructor simply calls release. */
+        /*! The destructor simply calls \ref release. */
         ~const_iterator() {
             release();
         }
@@ -1765,8 +1745,8 @@ public:
     };
 
     /*! An iterator supports the same operations as the const_iterator
-     *  and provides an additional set_value method to allow changing
-     *  values in the table. */
+     *  and provides an additional \ref set_value method to allow
+     *  changing values in the table. */
     class iterator : public const_iterator {
         /* This constructor does the same thing as the private
          * const_iterator one. */
@@ -1781,6 +1761,7 @@ public:
          *  constructor of const_iterator. */
         iterator(iterator&& it)
             : const_iterator(std::move(it)) {}
+
         /*! This constructor allows converting from a const_iterator
          *  to an iterator. */
         iterator(const_iterator&& it)
@@ -1797,11 +1778,11 @@ public:
             return this;
         }
 
-        /*! set_value sets the value pointed to by the iterator. This
-         * involves modifying the hash table itself, but since we have
-         * a lock on the table, we are okay. We are only changing the
-         * value in the bucket, so the element will retain it's
-         * position in the table. */
+        /*! set_value sets the value pointed to by the iterator to \p
+         * val. This involves modifying the hash table itself, but
+         * since we have a lock on the table, we are okay. We are only
+         * changing the value in the bucket, so the element will
+         * retain it's position in the table. */
         void set_value(const mapped_type val) {
             this->check_lock();
             if (this->is_end()) {
