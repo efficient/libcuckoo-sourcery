@@ -113,7 +113,7 @@ $(document).ready(function(){initNavTree('cuckoohash__util_8h_source.html','');}
 <div class="line"><a name="l00005"></a><span class="lineno">    5</span>&#160;<span class="preprocessor">#include &quot;<a class="code" href="cuckoohash__config_8h.html">cuckoohash_config.h</a>&quot;</span> <span class="comment">// for LIBCUCKOO_DEBUG</span></div>
 <div class="line"><a name="l00006"></a><span class="lineno">    6</span>&#160;</div>
 <div class="line"><a name="l00007"></a><span class="lineno">    7</span>&#160;<span class="preprocessor">#if LIBCUCKOO_DEBUG</span></div>
-<div class="line"><a name="l00008"></a><span class="lineno">    8</span>&#160;<span class="preprocessor"></span><span class="preprocessor">#  define LIBCUCKOO_DBG(fmt, args...)  fprintf(stderr, &quot;\x1b[32m&quot;&quot;[libcuckoo:%s:%d:%lu] &quot; fmt&quot;&quot; &quot;\x1b[0m&quot;,__FILE__,__LINE__, (unsigned long)pthread_self(), args)</span></div>
+<div class="line"><a name="l00008"></a><span class="lineno">    8</span>&#160;<span class="preprocessor"></span><span class="preprocessor">#  define LIBCUCKOO_DBG(fmt, args...)  fprintf(stderr, &quot;\x1b[32m&quot;&quot;[libcuckoo:%s:%d:%lu] &quot; fmt&quot;&quot; &quot;\x1b[0m&quot;,__FILE__,__LINE__, (unsigned long)pthread_self(), ##args)</span></div>
 <div class="line"><a name="l00009"></a><span class="lineno">    9</span>&#160;<span class="preprocessor"></span><span class="preprocessor">#else</span></div>
 <div class="line"><a name="l00010"></a><span class="lineno">   10</span>&#160;<span class="preprocessor"></span><span class="preprocessor">#  define LIBCUCKOO_DBG(fmt, args...)  do {} while (0)</span></div>
 <div class="line"><a name="l00011"></a><span class="lineno">   11</span>&#160;<span class="preprocessor"></span><span class="preprocessor">#endif</span></div>
@@ -126,7 +126,7 @@ $(document).ready(function(){initNavTree('cuckoohash__util_8h_source.html','');}
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
     <li class="navelem"><a class="el" href="dir_ac4ea4bd8ac261329328d8272b4742e6.html">libcuckoo</a></li><li class="navelem"><a class="el" href="dir_27647d5548fdf53cd0fc0f7562a58277.html">lib</a></li><li class="navelem"><b>cuckoohash_util.h</b></li>
-    <li class="footer">Generated on Mon Dec 16 2013 18:01:27 for libcuckoo by
+    <li class="footer">Generated on Tue Dec 17 2013 15:49:24 for libcuckoo by
     <a href="http://www.doxygen.org/index.html">
     <img class="footer" src="doxygen.png" alt="doxygen"/></a> 1.8.5 </li>
   </ul>
