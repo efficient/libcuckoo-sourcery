@@ -80,7 +80,7 @@ static void *read_thread(void* arg) {
             if (finished.load(std::memory_order_acquire)) {
                 return arg;
             }
-            KeyType key = *begin;
+            KeyType key = *it;
             bool found = cuckoo_find(table, (const char*)&key, (char*)&v) == ok;
             if (found != in_table) {
                 std::cerr << found << " doesn't match expected result of " << in_table << std::endl;
