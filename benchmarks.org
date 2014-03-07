@@ -1,0 +1,54 @@
+* xia-router2
+** libcuckoo
+*** reads
+**** Low memory (table sized to numkeys keys)
+***** integers (--power 25)
+      Throughput: 106225751.800000 reads/sec
+      max resident set size: 1843408 kb
+***** strings (--power 22)
+      Throughput: 39594267.600000 reads/sec
+      max resident set size: 2728528 kb
+***** strings (--power 25)
+      Throughput: 31990024.800000 reads/sec
+      max resident set size: 21766752 kb
+**** More memory (table sized to numkeys*3 keys)
+***** integers (--power 25)
+      Throughput: 116095727.200000 reads/sec
+      max resident set size: 5775600 kb
+***** strings (--power 22)
+      Throughput: 40357862.500000 reads/sec
+      max resident set size: 3416528 kb
+***** strings (--power 25)
+      Throughput: 31102608.000000 reads/sec
+      max resident set size: 27271632 kb
+*** inserts
+**** integers (--power 25)
+     Throughput: 46994105.307713 inserts/sec
+     max resident set size: 5775552 kb
+**** strings (--power 22)
+     Throughput: 20354828.447100 inserts/sec
+     max resident set size: 3416464 kb
+**** strings (--power 25)
+     Throughput: 21185974.970237 inserts/sec
+     max resident set size: 27271552 kb
+** tbb
+*** reads
+**** integers (--power 25)
+     Throughput: 125723191.200000 reads/sec
+     max resident set size: 5491376 kb
+**** strings (--power 22)
+     Throughput: 26227732.500000 reads/sec
+     max resident set size: 3237456 kb
+**** strings (--power 25)
+     Throughput: 20680739.600000 reads/sec
+     max resident set size: 25842176 kb
+*** inserts
+**** integers (--power 25)
+     Throughput: 6995666.246295 inserts/sec
+     max resident set size: 11782576 kb
+**** strings (--power 22)
+     Throughput: 6381935.850358 inserts/sec
+     max resident set size: 4023568 kb
+**** strings (--power 25)
+     Throughput: 6405496.526597 inserts/sec
+     max resident set size: 32133552 kb
