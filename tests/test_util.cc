@@ -9,6 +9,7 @@
 #include <iostream>
 #include <mutex>
 #include <libcuckoo/cuckoohash_map.hh>
+#include <tbb/concurrent_hash_map.h>
 
 std::mutex print_lock;
 typedef std::lock_guard<std::mutex> mutex_guard;
@@ -140,16 +141,36 @@ std::string generateKey<std::string>(size_t i) {
     return ret;
 }
 
-/* An overloaded function that does the inserts for different table
- * types. Inserts with a value of 0. */
+/* A specialization that runs inserts for different table types over a
+ * range of keys. */
+template <class T>
+struct inserter {
+};
+
 template <class KType, class VType>
-void insert_thread(cuckoohash_map<KType, VType>& table,
+struct inserter<cuckoohash_map<KType, VType>> {
+    static void fn(cuckoohash_map<KType, VType>& table,
                    typename std::vector<KType>::iterator begin,
                    typename std::vector<KType>::iterator end) {
-    for (;begin != end; begin++) {
-        ASSERT_TRUE(table.insert(*begin, 0));
+        for (;begin != end; begin++) {
+            ASSERT_TRUE(table.insert(*begin, 0));
+        }
     }
-}
+};
+
+template <class KType, class VType>
+struct inserter<tbb::concurrent_hash_map<KType, VType>> {
+    static void fn(tbb::concurrent_hash_map<KType, VType>& table,
+                   typename std::vector<KType>::iterator begin,
+                   typename std::vector<KType>::iterator end) {
+        typename tbb::concurrent_hash_map<KType, VType>::accessor a;
+        for (;begin != end; begin++) {
+            bool ret = table.insert(a, *begin);
+            ASSERT_TRUE(ret);
+            a->second = 0;
+        }
+    }
+};
 
 /* cacheint is a cache-aligned integer type. */
 struct cacheint {
@@ -159,28 +180,54 @@ struct cacheint {
     }
 } __attribute__((aligned(64)));
 
-/* An overloaded function that does the reads for different table
+/* A specialized class that does the reads for different table
  * types. It repeatedly searches for the keys in the given range until
  * the time is up. All the keys in the given range should either be in
  * the table or not in the table. */
+template <class T>
+struct reader {
+};
+
 template <class KType, class VType>
-void read_thread(cuckoohash_map<KType, VType>& table,
-                 typename std::vector<KType>::iterator begin,
-                 typename std::vector<KType>::iterator end,
-                 cacheint& reads,
-                 bool in_table,
-                 std::atomic<bool>& finished) {
-    VType v;
-    while (!finished.load(std::memory_order_acquire)) {
-        for (auto it = begin; it != end; it++) {
-            if (finished.load(std::memory_order_acquire)) {
-                return;
+struct reader<cuckoohash_map<KType, VType>> {
+    static void fn(cuckoohash_map<KType, VType>& table,
+                            typename std::vector<KType>::iterator begin,
+                            typename std::vector<KType>::iterator end,
+                            cacheint& reads,
+                            bool in_table,
+                            std::atomic<bool>& finished) {
+        VType v;
+        while (!finished.load(std::memory_order_acquire)) {
+            for (auto it = begin; it != end; it++) {
+                if (finished.load(std::memory_order_acquire)) {
+                    return;
+                }
+                ASSERT_EQ(table.find(*it, v), in_table);
+                reads.num++;
             }
-            ASSERT_EQ(table.find(*it, v), in_table);
-            reads.num++;
         }
     }
-}
+};
 
+template <class KType, class VType>
+struct reader<tbb::concurrent_hash_map<KType, VType>> {
+    static void fn(tbb::concurrent_hash_map<KType, VType>& table,
+                     typename std::vector<KType>::iterator begin,
+                     typename std::vector<KType>::iterator end,
+                     cacheint& reads,
+                     bool in_table,
+                     std::atomic<bool>& finished) {
+        typename tbb::concurrent_hash_map<KType, VType>::const_accessor a;
+        while (!finished.load(std::memory_order_acquire)) {
+            for (auto it = begin; it != end; it++) {
+                ASSERT_EQ(table.find(a, *it), in_table);
+                reads.num++;
+                if (finished.load(std::memory_order_acquire)) {
+                    return;
+                }
+            }
+        }
+    }
+};
 
 #endif

@@ -18,11 +18,13 @@
 #include <stdint.h>
 #include <sys/time.h>
 #include <thread>
+#include <type_traits>
 #include <unistd.h>
 #include <utility>
 #include <vector>
 
 #include <libcuckoo/cuckoohash_map.hh>
+#include <tbb/concurrent_hash_map.h>
 #include "test_util.cc"
 
 typedef uint32_t KeyType;
@@ -45,15 +47,16 @@ size_t seed = 0;
 // command line flag --time
 size_t test_len = 10;
 // Whether to use strings as the key
-bool use_strings = false;
+const bool use_strings = false;
+// Whether to use TBB
+const bool use_tbb = false;
 
 template <class T>
 class ReadEnvironment {
     using KType = typename T::key_type;
 public:
     // We allocate the vectors with 2^power keys.
-    ReadEnvironment()
-        : numkeys(1U<<power), table(numkeys), keys(numkeys) {
+    ReadEnvironment() : numkeys(1U<<power), table(numkeys), keys(numkeys) {
         // Sets up the random number generator
         if (seed == 0) {
             seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -75,7 +78,7 @@ public:
         std::vector<std::thread> threads;
         size_t keys_per_thread = numkeys * (load / 100.0) / thread_num;
         for (size_t i = 0; i < thread_num; i++) {
-            threads.emplace_back(insert_thread<KType, ValType>, std::ref(table),
+            threads.emplace_back(inserter<T>::fn, std::ref(table),
                                  keys.begin()+i*keys_per_thread,
                                  keys.begin()+(i+1)*keys_per_thread);
         }
@@ -98,7 +101,6 @@ public:
 
 template <class T>
 void ReadThroughputTest(ReadEnvironment<T> *env) {
-    using KType = typename T::key_type;
     std::vector<std::thread> threads;
     std::vector<cacheint> counters(thread_num);
     // We use the first half of the threads to read the init_size
@@ -111,13 +113,13 @@ void ReadThroughputTest(ReadEnvironment<T> *env) {
     // When set to true, it signals to the threads to stop running
     std::atomic<bool> finished(false);
     for (size_t i = 0; i < first_threadnum; i++) {
-        threads.emplace_back(read_thread<KType, ValType>, std::ref(env->table),
+        threads.emplace_back(reader<T>::fn, std::ref(env->table),
                              env->keys.begin() + (i*in_keys_per_thread),
                              env->keys.begin() + ((i+1)*in_keys_per_thread),
                              std::ref(counters[i]), true, std::ref(finished));
     }
     for (size_t i = 0; i < second_threadnum; i++) {
-        threads.emplace_back(read_thread<KType, ValType>, std::ref(env->table),
+        threads.emplace_back(reader<T>::fn, std::ref(env->table),
                              env->keys.begin() + (i*out_keys_per_thread) + env->init_size,
                              env->keys.begin() + (i+1)*out_keys_per_thread + env->init_size,
                              std::ref(counters[first_threadnum+i]), false, std::ref(finished));
@@ -146,20 +148,21 @@ int main(int argc, char** argv) {
                               "The load factor to fill the table up to before testing reads",
                               "The number of seconds to run the test for",
                               "The seed used by the random number generator"};
-    const char* flags[] = {"--use-strings"};
-    bool* flag_vars[] = {&use_strings};
-    const char* flag_help[] = {"If set, the key type of the map will be std::string"};
-    parse_flags(argc, argv, "A benchmark for reads", args, arg_vars,
-                arg_help, sizeof(args)/sizeof(const char*), flags,
-                flag_vars, flag_help, sizeof(flags)/sizeof(const char*));
+    const char* flags[] = {};
+    bool* flag_vars[] = {};
+    const char* flag_help[] = {};
+    parse_flags(argc, argv, "A benchmark for inserts",
+                args, arg_vars, arg_help, sizeof(args)/sizeof(const char*),
+                flags, flag_vars, flag_help, sizeof(flags)/sizeof(const char*));
 
-    if (use_strings) {
-        auto *env = new ReadEnvironment<cuckoohash_map<KeyType2, ValType>>;
-        ReadThroughputTest(env);
-        delete env;
-    } else {
-        auto *env = new ReadEnvironment<cuckoohash_map<KeyType, ValType>>;
-        ReadThroughputTest(env);
-        delete env;
-    }
+    using Table = typename std::conditional<use_tbb,
+                                            typename std::conditional<use_strings,
+                                                                      typename tbb::concurrent_hash_map<KeyType2, ValType>,
+                                                                      typename tbb::concurrent_hash_map<KeyType, ValType>>::type,
+                                            typename std::conditional<use_strings,
+                                                                      cuckoohash_map<KeyType2, ValType>,
+                                                                      cuckoohash_map<KeyType, ValType>>::type>::type;
+    auto *env = new ReadEnvironment<Table>;
+    ReadThroughputTest(env);
+    delete env;
 }

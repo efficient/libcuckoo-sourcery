@@ -17,11 +17,13 @@
 #include <stdint.h>
 #include <sys/time.h>
 #include <thread>
+#include <type_traits>
 #include <unistd.h>
 #include <utility>
 #include <vector>
 
 #include <libcuckoo/cuckoohash_map.hh>
+#include <tbb/concurrent_hash_map.h>
 #include "test_util.cc"
 
 typedef uint32_t KeyType;
@@ -45,14 +47,15 @@ size_t end_load = 90;
 // with the command line flag --seed
 size_t seed = 0;
 // Whether to use strings as the key
-bool use_strings = false;
+const bool use_strings = false;
+// Whether to use TBB;
+const bool use_tbb = false;
 
 template <class T>
 class InsertEnvironment {
     using KType = typename T::key_type;
 public:
-    InsertEnvironment()
-        : numkeys(1U << power), table(numkeys), keys(numkeys) {
+    InsertEnvironment() : numkeys(1U << power), table(numkeys*3), keys(numkeys) {
         // Sets up the random number generator
         if (seed == 0) {
             seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -74,7 +77,7 @@ public:
         std::vector<std::thread> threads;
         size_t keys_per_thread = numkeys * (begin_load / 100.0) / thread_num;
         for (size_t i = 0; i < thread_num; i++) {
-            threads.emplace_back(insert_thread<KType, ValType>, std::ref(table),
+            threads.emplace_back(inserter<T>::fn, std::ref(table),
                                  keys.begin()+i*keys_per_thread,
                                  keys.begin()+(i+1)*keys_per_thread);
         }
@@ -104,8 +107,8 @@ void InsertThroughputTest(InsertEnvironment<T> *env) {
     timeval t1, t2;
     gettimeofday(&t1, NULL);
     for (size_t i = 0; i < thread_num; i++) {
-        threads.emplace_back(insert_thread<KType, ValType>, std::ref(env->table), 
-                             env->keys.begin()+(i*keys_per_thread)+env->init_size, 
+        threads.emplace_back(inserter<T>::fn, std::ref(env->table),
+                             env->keys.begin()+(i*keys_per_thread)+env->init_size,
                              env->keys.begin()+((i+1)*keys_per_thread)+env->init_size);
     }
     for (size_t i = 0; i < threads.size(); i++) {
@@ -131,12 +134,12 @@ int main(int argc, char** argv) {
                               "The load factor to fill the table up to before testing throughput",
                               "The maximum load factor to fill the table up to when testing throughput",
                               "The seed used by the random number generator"};
-    const char* flags[] = {"--use-strings"};
-    bool* flag_vars[] = {&use_strings};
-    const char* flag_help[] = {"If set, the key type of the map will be std::string"};
-    parse_flags(argc, argv, "A benchmark for inserts", args, arg_vars, arg_help,
-                sizeof(args)/sizeof(const char*), flags, flag_vars, flag_help,
-                sizeof(flags)/sizeof(const char*));
+    const char* flags[] = {};
+    bool* flag_vars[] = {};
+    const char* flag_help[] = {};
+    parse_flags(argc, argv, "A benchmark for inserts",
+                args, arg_vars, arg_help, sizeof(args)/sizeof(const char*),
+                flags, flag_vars, flag_help, sizeof(flags)/sizeof(const char*));
 
     if (begin_load >= 100) {
         std::cerr << "--begin-load must be between 0 and 99" << std::endl;
@@ -146,13 +149,15 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    if (use_strings) {
-        auto *env = new InsertEnvironment<cuckoohash_map<KeyType2, ValType>>;
-        InsertThroughputTest(env);
-        delete env;
-    } else {
-        auto *env = new InsertEnvironment<cuckoohash_map<KeyType, ValType>>;
-        InsertThroughputTest(env);
-        delete env;
-    }
+    using Table = typename std::conditional<use_tbb,
+                                            typename std::conditional<use_strings,
+                                                                      typename tbb::concurrent_hash_map<KeyType2, ValType>,
+                                                                      typename tbb::concurrent_hash_map<KeyType, ValType>>::type,
+                                            typename std::conditional<use_strings,
+                                                                      cuckoohash_map<KeyType2, ValType>,
+                                                                      cuckoohash_map<KeyType, ValType>>::type>::type;
+
+    auto *env = new InsertEnvironment<Table>;
+    InsertThroughputTest(env);
+    delete env;
 }
