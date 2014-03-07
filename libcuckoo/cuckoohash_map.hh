@@ -23,6 +23,67 @@
 #include "cuckoohash_config.h"
 #include "cuckoohash_util.h"
 
+class rwl {
+    std::atomic_uint readers_;
+    std::atomic_bool wlock_;
+public:
+    rwl(): readers_(0), wlock_(false) {}
+
+    template <bool is_read>
+    inline void lock();
+
+    template <bool is_read>
+    inline void unlock();
+
+    template <bool is_read>
+    inline bool is_locked();
+
+} __attribute__((aligned(64)));
+
+template <>
+inline void rwl::lock<true>() {
+    while (wlock_.load(std::memory_order_acquire));
+    readers_.fetch_add(1, std::memory_order_release);
+    if (wlock_.load(std::memory_order_acquire)) {
+        readers_.fetch_sub(1, std::memory_order_release);
+        lock<true>();
+    }
+}
+
+template <>
+inline void rwl::lock<false>() {
+    bool expected = false;
+    while (readers_.load(std::memory_order_acquire) > 0 ||
+           !wlock_.compare_exchange_strong(
+               expected, true,
+               std::memory_order_release,
+               std::memory_order_acquire)) {
+        expected = false;
+    }
+    if (readers_.load(std::memory_order_acquire) > 0) {
+        wlock_.store(false, std::memory_order_release);
+        lock<false>();
+    }
+}
+
+template <>
+inline void rwl::unlock<true>() {
+    readers_.fetch_sub(1, std::memory_order_release);
+}
+template <>
+inline void rwl::unlock<false>() {
+    wlock_.store(false);
+}
+
+template <>
+inline bool rwl::is_locked<true>() {
+    return readers_.load(std::memory_order_acquire) > 0;
+}
+template <>
+inline bool rwl::is_locked<false>() {
+    return wlock_.load(std::memory_order_acquire);
+}
+
 /*! cuckoohash_map is the hash table class. */
 template <class Key, class T, class Hash = std::hash<Key>, class Pred = std::equal_to<Key> >
 class cuckoohash_map {
@@ -206,10 +267,10 @@ public:
     void clear() {
         check_hazard_pointer();
         expansion_lock.lock();
-        TableInfo *ti = snapshot_and_lock_all();
+        TableInfo *ti = snapshot_and_lock_all<false>();
         assert(ti != nullptr);
         cuckoo_clear(ti);
-        unlock_all(ti);
+        unlock_all<false>(ti);
         expansion_lock.unlock();
         unset_hazard_pointer();
     }
@@ -267,10 +328,10 @@ public:
         size_t hv = hashed_key(key);
         TableInfo *ti;
         size_t i1, i2;
-        snapshot_and_lock_two(hv, ti, i1, i2);
+        snapshot_and_lock_two<true>(hv, ti, i1, i2);
 
         const cuckoo_status st = cuckoo_find(key, val, hv, ti, i1, i2);
-        unlock_two(ti, i1, i2);
+        unlock_two<true>(ti, i1, i2);
         unset_hazard_pointer();
 
         return (st == ok);
@@ -302,7 +363,7 @@ public:
         size_t hv = hashed_key(key);
         TableInfo *ti;
         size_t i1, i2;
-        snapshot_and_lock_two(hv, ti, i1, i2);
+        snapshot_and_lock_two<false>(hv, ti, i1, i2);
         return cuckoo_insert_loop(key, val, hv, ti, i1, i2);
     }
 
@@ -315,10 +376,10 @@ public:
         size_t hv = hashed_key(key);
         TableInfo *ti;
         size_t i1, i2;
-        snapshot_and_lock_two(hv, ti, i1, i2);
+        snapshot_and_lock_two<false>(hv, ti, i1, i2);
 
         const cuckoo_status st = cuckoo_delete(key, hv, ti, i1, i2);
-        unlock_two(ti, i1, i2);
+        unlock_two<false>(ti, i1, i2);
         unset_hazard_pointer();
 
         return (st == ok);
@@ -331,10 +392,10 @@ public:
         size_t hv = hashed_key(key);
         TableInfo *ti;
         size_t i1, i2;
-        snapshot_and_lock_two(hv, ti, i1, i2);
+        snapshot_and_lock_two<false>(hv, ti, i1, i2);
 
         const cuckoo_status st = cuckoo_update(key, val, hv, ti, i1, i2);
-        unlock_two(ti, i1, i2);
+        unlock_two<false>(ti, i1, i2);
         unset_hazard_pointer();
 
         return (st == ok);
@@ -350,10 +411,10 @@ public:
         size_t hv = hashed_key(key);
         TableInfo *ti;
         size_t i1, i2;
-        snapshot_and_lock_two(hv, ti, i1, i2);
+        snapshot_and_lock_two<false>(hv, ti, i1, i2);
 
         const cuckoo_status st = cuckoo_update_fn(key, fn, hv, ti, i1, i2);
-        unlock_two(ti, i1, i2);
+        unlock_two<false>(ti, i1, i2);
         unset_hazard_pointer();
 
         return (st == ok);
@@ -372,22 +433,22 @@ public:
 
         bool res;
         do {
-        snapshot_and_lock_two(hv, ti, i1, i2);
+            snapshot_and_lock_two<false>(hv, ti, i1, i2);
 
-        const cuckoo_status st = cuckoo_update_fn(key, fn, hv, ti, i1, i2);
-        if (st == ok) {
-            unlock_two(ti, i1, i2);
-            unset_hazard_pointer();
-            return true;
-        }
+            const cuckoo_status st = cuckoo_update_fn(key, fn, hv, ti, i1, i2);
+            if (st == ok) {
+                unlock_two<false>(ti, i1, i2);
+                unset_hazard_pointer();
+                return true;
+            }
 
-        // We run an insert, since the update failed
-        res = cuckoo_insert_loop(key, val, hv, ti, i1, i2);
+            // We run an insert, since the update failed
+            res = cuckoo_insert_loop(key, val, hv, ti, i1, i2);
 
-        // The only valid reason for res being false is if insert
-        // encountered a duplicate key after releasing the locks and
-        // performing cuckoo hashing. In this case, we retry the
-        // entire upsert operation.
+            // The only valid reason for res being false is if insert
+            // encountered a duplicate key after releasing the locks and
+            // performing cuckoo hashing. In this case, we retry the
+            // entire upsert operation.
         } while (!res);
         return true;
     }
@@ -487,7 +548,7 @@ private:
     } __attribute__((aligned(64)));
 
     // An alias for the type of lock we are using
-    typedef spinlock locktype;
+    typedef rwl locktype;
 
     /* TableInfo contains the entire state of the hashtable. We
      * allocate one TableInfo pointer per hash table and store all of
@@ -557,45 +618,50 @@ private:
     static std::allocator<Bucket> bucket_allocator;
 
     /* lock locks the given bucket index. */
+    template <bool is_read>
     static inline void lock(const TableInfo *ti, const size_t i) {
-        ti->locks_[lock_ind(i)].lock();
+        ti->locks_[lock_ind(i)].template lock<is_read>();
     }
 
     /* unlock unlocks the given bucket index. */
+    template <bool is_read>
     static inline void unlock(const TableInfo *ti, const size_t i) {
-        ti->locks_[lock_ind(i)].unlock();
+        ti->locks_[lock_ind(i)].template unlock<is_read>();
     }
 
     /* lock_two locks the two bucket indexes, always locking the
      * earlier index first to avoid deadlock. If the two indexes are
      * the same, it just locks one. */
+    template <bool is_read>
     static inline void lock_two(const TableInfo *ti, size_t i1, size_t i2) {
         i1 = lock_ind(i1);
         i2 = lock_ind(i2);
         if (i1 < i2) {
-            ti->locks_[i1].lock();
-            ti->locks_[i2].lock();
+            ti->locks_[i1].template lock<is_read>();
+            ti->locks_[i2].template lock<is_read>();
         } else if (i2 < i1) {
-            ti->locks_[i2].lock();
-            ti->locks_[i1].lock();
+            ti->locks_[i2].template lock<is_read>();
+            ti->locks_[i1].template lock<is_read>();
         } else {
-            ti->locks_[i1].lock();
+            ti->locks_[i1].template lock<is_read>();
         }
     }
 
     /* unlock_two unlocks both of the given bucket indexes, or only
      * one if they are equal. Order doesn't matter here. */
+    template <bool is_read>
     static inline void unlock_two(const TableInfo *ti, size_t i1, size_t i2) {
         i1 = lock_ind(i1);
         i2 = lock_ind(i2);
-        ti->locks_[i1].unlock();
+        ti->locks_[i1].template unlock<is_read>();
         if (i1 != i2) {
-            ti->locks_[i2].unlock();
+            ti->locks_[i2].template unlock<is_read>();
         }
     }
 
     /* lock_three locks the three bucket indexes in numerical
      * order. */
+    template <bool is_read>
     static inline void lock_three(const TableInfo *ti, size_t i1,
                                   size_t i2, size_t i3) {
         i1 = lock_ind(i1);
@@ -603,56 +669,57 @@ private:
         i3 = lock_ind(i3);
         // If any are the same, we just run lock_two
         if (i1 == i2) {
-            lock_two(ti, i1, i3);
+            lock_two<is_read>(ti, i1, i3);
         } else if (i2 == i3) {
-            lock_two(ti, i1, i3);
+            lock_two<is_read>(ti, i1, i3);
         } else if (i1 == i3) {
-            lock_two(ti, i1, i2);
+            lock_two<is_read>(ti, i1, i2);
         } else {
             if (i1 < i2) {
                 if (i2 < i3) {
-                    ti->locks_[i1].lock();
-                    ti->locks_[i2].lock();
-                    ti->locks_[i3].lock();
+                    ti->locks_[i1].template lock<is_read>();
+                    ti->locks_[i2].template lock<is_read>();
+                    ti->locks_[i3].template lock<is_read>();
                 } else if (i1 < i3) {
-                    ti->locks_[i1].lock();
-                    ti->locks_[i3].lock();
-                    ti->locks_[i2].lock();
+                    ti->locks_[i1].template lock<is_read>();
+                    ti->locks_[i3].template lock<is_read>();
+                    ti->locks_[i2].template lock<is_read>();
                 } else {
-                    ti->locks_[i3].lock();
-                    ti->locks_[i1].lock();
-                    ti->locks_[i2].lock();
+                    ti->locks_[i3].template lock<is_read>();
+                    ti->locks_[i1].template lock<is_read>();
+                    ti->locks_[i2].template lock<is_read>();
                 }
             } else if (i2 < i3) {
                 if (i1 < i3) {
-                    ti->locks_[i2].lock();
-                    ti->locks_[i1].lock();
-                    ti->locks_[i3].lock();
+                    ti->locks_[i2].template lock<is_read>();
+                    ti->locks_[i1].template lock<is_read>();
+                    ti->locks_[i3].template lock<is_read>();
                 } else {
-                    ti->locks_[i2].lock();
-                    ti->locks_[i3].lock();
-                    ti->locks_[i1].lock();
+                    ti->locks_[i2].template lock<is_read>();
+                    ti->locks_[i3].template lock<is_read>();
+                    ti->locks_[i1].template lock<is_read>();
                 }
             } else {
-                ti->locks_[i3].lock();
-                ti->locks_[i2].lock();
-                ti->locks_[i1].lock();
+                ti->locks_[i3].template lock<is_read>();
+                ti->locks_[i2].template lock<is_read>();
+                ti->locks_[i1].template lock<is_read>();
             }
         }
     }
 
     /* unlock_three unlocks the three given buckets */
+    template <bool is_read>
     static inline void unlock_three(const TableInfo *ti, size_t i1,
                                     size_t i2, size_t i3) {
         i1 = lock_ind(i1);
         i2 = lock_ind(i2);
         i3 = lock_ind(i3);
-        ti->locks_[i1].unlock();
+        ti->locks_[i1].template unlock<is_read>();
         if (i2 != i1) {
-            ti->locks_[i2].unlock();
+            ti->locks_[i2].template unlock<is_read>();
         }
         if (i3 != i1 && i3 != i2) {
-            ti->locks_[i3].unlock();
+            ti->locks_[i3].template unlock<is_read>();
         }
     }
 
@@ -685,6 +752,7 @@ private:
      * Since the positions of the bucket locks depends on the number
      * of buckets in the table, the table_info pointer needs to be
      * grabbed first. */
+    template <bool is_read>
     void snapshot_and_lock_two(const size_t hv, TableInfo*& ti,
                                size_t& i1, size_t& i2) {
     TryAcquire:
@@ -695,9 +763,9 @@ private:
         }
         i1 = index_hash(ti, hv);
         i2 = alt_index(ti, hv, i1);
-        lock_two(ti, i1, i2);
+        lock_two<is_read>(ti, i1, i2);
         if (ti != table_info.load()) {
-            unlock_two(ti, i1, i2);
+            unlock_two<is_read>(ti, i1, i2);
             goto TryAcquire;
         }
     }
@@ -707,20 +775,22 @@ private:
      * expansion_lock mutex, so multiple calls to this function cannot
      * take place at the same time. Therefore, we don't need to
      * re-check the loaded table_info. */
+    template <bool is_read>
     TableInfo *snapshot_and_lock_all() {
         assert(!expansion_lock.try_lock());
         TableInfo *ti = table_info.load();
         *hazard_pointer = static_cast<void*>(ti);
         for (size_t i = 0; i < kNumLocks; i++) {
-            ti->locks_[i].lock();
+            ti->locks_[i].template lock<is_read>();
         }
         return ti;
     }
 
     /* unlock_all releases all the locks */
+    template <bool is_read>
     inline void unlock_all(TableInfo *ti) {
         for (size_t i = 0; i < kNumLocks; i++) {
-            ti->locks_[i].unlock();
+            ti->locks_[i].template unlock<is_read>();
         }
     }
 
@@ -878,18 +948,18 @@ private:
             b_slot x = q.dequeue();
             // Picks a random slot to start from
             for (size_t slot = 0; slot < SLOT_PER_BUCKET && q.not_full(); slot++) {
-                lock(ti, x.bucket);
+                lock<true>(ti, x.bucket);
                 if (!ti->buckets_[x.bucket].occupied[slot]) {
                     // We can terminate the search here
                     x.pathcode = x.pathcode * SLOT_PER_BUCKET + slot;
-                    unlock(ti, x.bucket);
+                    unlock<true>(ti, x.bucket);
                     return x;
                 }
                 // Create a new b_slot item, that represents the
                 // bucket we would look at after searching x.bucket
                 // for empty slots.
                 const size_t hv = hashed_key(ti->buckets_[x.bucket].keys[slot]);
-                unlock(ti, x.bucket);
+                unlock<true>(ti, x.bucket);
                 b_slot y(alt_index(ti, hv, x.bucket),
                          x.pathcode * SLOT_PER_BUCKET + slot, x.depth+1);
 
@@ -897,15 +967,15 @@ private:
                 // are empty, and, if so, return that b_slot. We lock
                 // the bucket so that no changes occur while
                 // iterating.
-                lock(ti, y.bucket);
+                lock<true>(ti, y.bucket);
                 for (size_t j = 0; j < SLOT_PER_BUCKET; j++) {
                     if (!ti->buckets_[y.bucket].occupied.test(j)) {
                         y.pathcode = y.pathcode * SLOT_PER_BUCKET + j;
-                        unlock(ti, y.bucket);
+                        unlock<true>(ti, y.bucket);
                         return y;
                     }
                 }
-                unlock(ti, y.bucket);
+                unlock<true>(ti, y.bucket);
 
                 // No empty slots were found, so we push this onto the
                 // queue
@@ -945,25 +1015,25 @@ private:
         CuckooRecord *curr = cuckoo_path;
         if (x.pathcode == 0) {
             curr->bucket = i1;
-            lock(ti, curr->bucket);
+            lock<true>(ti, curr->bucket);
             if (!ti->buckets_[curr->bucket].occupied[curr->slot]) {
                 // We can terminate here
-                unlock(ti, curr->bucket);
+                unlock<true>(ti, curr->bucket);
                 return 0;
             }
             curr->key = ti->buckets_[curr->bucket].keys[curr->slot];
-            unlock(ti, curr->bucket);
+            unlock<true>(ti, curr->bucket);
         } else {
             assert(x.pathcode == 1);
             curr->bucket = i2;
-            lock(ti, curr->bucket);
+            lock<true>(ti, curr->bucket);
             if (!ti->buckets_[curr->bucket].occupied[curr->slot]) {
                 // We can terminate here
-                unlock(ti, curr->bucket);
+                unlock<true>(ti, curr->bucket);
                 return 0;
             }
             curr->key = ti->buckets_[curr->bucket].keys[curr->slot];
-            unlock(ti, curr->bucket);
+            unlock<true>(ti, curr->bucket);
         }
         for (int i = 1; i <= x.depth; i++) {
             CuckooRecord *prev = curr++;
@@ -973,14 +1043,14 @@ private:
             // We get the bucket that this slot is on by computing the
             // alternate index of the previous bucket
             curr->bucket = alt_index(ti, prevhv, prev->bucket);
-            lock(ti, curr->bucket);
+            lock<true>(ti, curr->bucket);
             if (!ti->buckets_[curr->bucket].occupied[curr->slot]) {
                 // We can terminate here
-                unlock(ti, curr->bucket);
+                unlock<true>(ti, curr->bucket);
                 return i;
             }
             curr->key = ti->buckets_[curr->bucket].keys[curr->slot];
-            unlock(ti, curr->bucket);
+            unlock<true>(ti, curr->bucket);
         }
         return x.depth;
     }
@@ -1006,11 +1076,11 @@ private:
              * insertable, so we hold the locks and return true. */
             const size_t bucket = cuckoo_path[0].bucket;
             assert(bucket == i1 || bucket == i2);
-            lock_two(ti, i1, i2);
+            lock_two<false>(ti, i1, i2);
             if (!ti->buckets_[bucket].occupied[cuckoo_path[0].slot]) {
                 return true;
             } else {
-                unlock_two(ti, i1, i2);
+                unlock_two<false>(ti, i1, i2);
                 return false;
             }
         }
@@ -1030,9 +1100,9 @@ private:
                  * are swapping to, since at the end of this function,
                  * i1 and i2 must be locked. */
                 ob = (fb == i1) ? i2 : i1;
-                lock_three(ti, fb, tb, ob);
+                lock_three<false>(ti, fb, tb, ob);
             } else {
-                lock_two(ti, fb, tb);
+                lock_two<false>(ti, fb, tb);
             }
 
             /* We plan to kick out fs, but let's check if it is still
@@ -1045,9 +1115,9 @@ private:
                 ti->buckets_[tb].occupied[ts] ||
                 !ti->buckets_[fb].occupied[fs]) {
                 if (depth == 1) {
-                    unlock_three(ti, fb, tb, ob);
+                    unlock_three<false>(ti, fb, tb, ob);
                 } else {
-                    unlock_two(ti, fb, tb);
+                    unlock_two<false>(ti, fb, tb);
                 }
                 return false;
             }
@@ -1062,10 +1132,10 @@ private:
                 // cuckoo_insert. Only unlock tb if it doesn't unlock
                 // the same bucket as fb or ob.
                 if (lock_ind(tb) != lock_ind(fb) && lock_ind(tb) != lock_ind(ob)) {
-                    unlock(ti, tb);
+                    unlock<false>(ti, tb);
                 }
             } else {
-                unlock_two(ti, fb, tb);
+                unlock_two<false>(ti, fb, tb);
             }
             depth--;
         }
@@ -1106,7 +1176,7 @@ private:
         // invalid. For this, we check that ti == table_info.load()
         // after cuckoopath_move, signaling to the outer insert to try
         // again if the comparison fails.
-        unlock_two(ti, i1, i2);
+        unlock_two<false>(ti, i1, i2);
 
         bool done = false;
         while (!done) {
@@ -1119,8 +1189,8 @@ private:
                 insert_bucket = cuckoo_path[0].bucket;
                 insert_slot = cuckoo_path[0].slot;
                 assert(insert_bucket == i1 || insert_bucket == i2);
-                assert(!ti->locks_[lock_ind(i1)].try_lock());
-                assert(!ti->locks_[lock_ind(i2)].try_lock());
+                assert(ti->locks_[lock_ind(i1)].template is_locked<false>());
+                assert(ti->locks_[lock_ind(i2)].template is_locked<false>());
                 assert(!ti->buckets_[insert_bucket].occupied[insert_slot]);
                 done = true;
                 break;
@@ -1129,12 +1199,12 @@ private:
 
         if (!done) {
             return failure;
-        } else if (ti != table_info.load()) {
+        } else if (ti != table_info.load(std::memory_order_acquire)) {
             // Unlock i1 and i2 and signal to cuckoo_insert to try
             // again. Since we set the hazard pointer to be ti, this
             // check isn't susceptible to an ABA issue, since a new
             // pointer can't have the same address as ti.
-            unlock_two(ti, i1, i2);
+            unlock_two<false>(ti, i1, i2);
             return failure_under_expansion;
         }
         return ok;
@@ -1292,21 +1362,21 @@ private:
         int res1, res2;
         const partial_t partial = partial_key(hv);
         if (!try_add_to_bucket(ti, partial, key, val, i1, res1)) {
-            unlock_two(ti, i1, i2);
+            unlock_two<false>(ti, i1, i2);
             return failure_key_duplicated;
         }
         if (!try_add_to_bucket(ti, partial, key, val, i2, res2)) {
-            unlock_two(ti, i1, i2);
+            unlock_two<false>(ti, i1, i2);
             return failure_key_duplicated;
         }
         if (res1 != -1) {
             add_to_bucket(ti, partial, key, val, i1, res1);
-            unlock_two(ti, i1, i2);
+            unlock_two<false>(ti, i1, i2);
             return ok;
         }
         if (res2 != -1) {
             add_to_bucket(ti, partial, key, val, i2, res2);
-            unlock_two(ti, i1, i2);
+            unlock_two<false>(ti, i1, i2);
             return ok;
         }
 
@@ -1321,8 +1391,8 @@ private:
              * failure_under_expansion. */
             return failure_under_expansion;
         } else if (st == ok) {
-            assert(!ti->locks_[lock_ind(i1)].try_lock());
-            assert(!ti->locks_[lock_ind(i2)].try_lock());
+            assert(ti->locks_[lock_ind(i1)].template is_locked<false>());
+            assert(ti->locks_[lock_ind(i2)].template is_locked<false>());
             assert(!ti->buckets_[insert_bucket].occupied[insert_slot]);
             assert(insert_bucket == index_hash(ti, hv) || insert_bucket == alt_index(ti, hv, index_hash(ti, hv)));
             /* Since we unlocked the buckets during run_cuckoo,
@@ -1330,11 +1400,11 @@ private:
              * either i1 or i2, so we check for that before doing the
              * insert. */
             if (cuckoo_find(key, oldval, hv, ti, i1, i2) == ok) {
-                unlock_two(ti, i1, i2);
+                unlock_two<false>(ti, i1, i2);
                 return failure_key_duplicated;
             }
             add_to_bucket(ti, partial, key, val, insert_bucket, insert_slot);
-            unlock_two(ti, i1, i2);
+            unlock_two<false>(ti, i1, i2);
             return ok;
         }
 
@@ -1368,7 +1438,7 @@ private:
                     LIBCUCKOO_DBG("expansion is on-going\n");
                 }
             }
-            snapshot_and_lock_two(hv, ti, i1, i2);
+            snapshot_and_lock_two<false>(hv, ti, i1, i2);
             st = cuckoo_insert(key, val, hv, ti, i1, i2);
         }
         unset_hazard_pointer();
@@ -1492,12 +1562,12 @@ private:
             unset_hazard_pointer();
             return failure_under_expansion;
         }
-        TableInfo *ti = snapshot_and_lock_all();
+        TableInfo *ti = snapshot_and_lock_all<false>();
         assert(ti != nullptr);
         if (n <= ti->hashpower_) {
             // Most likely another expansion ran before this one could
             // grab the locks
-            unlock_all(ti);
+            unlock_all<false>(ti);
             unset_hazard_pointer();
             expansion_lock.unlock();
             return failure_under_expansion;
@@ -1528,7 +1598,7 @@ private:
             new_map.table_info.store(nullptr);
         } catch (const std::bad_alloc&) {
             // Unlocks resources and rethrows the exception
-            unlock_all(ti);
+            unlock_all<false>(ti);
             unset_hazard_pointer();
             expansion_lock.unlock();
             throw;
@@ -1538,7 +1608,7 @@ private:
         // old_table_infos. The hazard pointer manager will delete it
         // if no other threads are using the pointer.
         old_table_infos.push_back(ti);
-        unlock_all(ti);
+        unlock_all<false>(ti);
         unset_hazard_pointer();
         global_hazard_pointers.delete_unused(old_table_infos);
         expansion_lock.unlock();
@@ -1579,7 +1649,7 @@ public:
             cuckoohash_map<Key, T, Hash, Pred>::check_hazard_pointer();
             hm_ = hm;
             hm->expansion_lock.lock();
-            ti_ = hm_->snapshot_and_lock_all();
+            ti_ = hm_->snapshot_and_lock_all<false>();
             assert(ti_ != nullptr);
 
             has_table_lock = true;
@@ -1629,7 +1699,7 @@ public:
          * with this iterator. */
         void release() {
             if (has_table_lock) {
-                hm_->unlock_all(ti_);
+                hm_->unlock_all<false>(ti_);
                 hm_->expansion_lock.unlock();
                 cuckoohash_map<Key, T, Hash, Pred>::unset_hazard_pointer();
                 has_table_lock = false;
