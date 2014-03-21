@@ -313,6 +313,6 @@ typedef enum {
                                                                                   typename std::unordered_map<KeyType, ValType>   \
                                                                                   >::type                                         \
                                                         >::type                                                                   \
-                              >::type                                                                                             \
+                              >::type; do { if(tt == STL) { thread_num = 1; } } while (0)                                         \
 
 #endif

@@ -1,16 +1,29 @@
+* command
+  /usr/bin/time -f "max resident set size: %M kb" [program]
 * xia-router2
 ** libcuckoo
 *** reads
 **** Low memory (table sized to numkeys keys)
-***** integers (--power 25)
-      Throughput: 106225751.800000 reads/sec
-      max resident set size: 1843408 kb
-***** strings (--power 22)
-      Throughput: 39594267.600000 reads/sec
-      max resident set size: 2728528 kb
-***** strings (--power 25)
-      Throughput: 31990024.800000 reads/sec
-      max resident set size: 21766752 kb
+***** integers
+****** power 19
+       Throughput: 143816137.300000 reads/sec
+       max resident set size: 43056 kb
+****** power 22
+       Throughput: 123104134.500000 reads/sec
+       max resident set size: 237776 kb
+****** power 25
+       Throughput: 106225751.800000 reads/sec
+       max resident set size: 1843408 kb
+***** strings
+****** power 19
+       Throughput: 39544438.300000 reads/sec
+       max resident set size: 2728400 kb
+****** power 22
+       Throughput: 39594267.600000 reads/sec
+       max resident set size: 2728528 kb
+****** power 25
+       Throughput: 31990024.800000 reads/sec
+       max resident set size: 21766752 kb
 **** More memory (table sized to numkeys*3 keys)
 ***** integers (--power 25)
       Throughput: 116095727.200000 reads/sec
@@ -22,33 +35,109 @@
       Throughput: 31102608.000000 reads/sec
       max resident set size: 27271632 kb
 *** inserts
-**** integers (--power 25)
+**** integers
+***** power 19
+      Throughput: 49197789.594411 inserts/sec
+      max resident set size: 42848 kb
+***** power 22
+      Throughput: 48250939.489225 inserts/sec
+      max resident set size: 237664 kb
+***** power 25
      Throughput: 46994105.307713 inserts/sec
      max resident set size: 5775552 kb
-**** strings (--power 22)
+**** strings
+***** power 19
+      Throughput: 9514760.445233 inserts/sec
+      max resident set size: 348672 kb
+***** power 22
      Throughput: 20354828.447100 inserts/sec
      max resident set size: 3416464 kb
-**** strings (--power 25)
+***** power 25
      Throughput: 21185974.970237 inserts/sec
      max resident set size: 27271552 kb
 ** tbb
 *** reads
-**** integers (--power 25)
-     Throughput: 125723191.200000 reads/sec
-     max resident set size: 5491376 kb
-**** strings (--power 22)
-     Throughput: 26227732.500000 reads/sec
-     max resident set size: 3237456 kb
-**** strings (--power 25)
-     Throughput: 20680739.600000 reads/sec
-     max resident set size: 25842176 kb
+**** integers
+***** power 19
+      Throughput: 137521661.400000 reads/sec
+      max resident set size: 93488 kb
+***** power 22
+      Throughput: 126111807.100000 reads/sec
+      max resident set size: 693536 kb
+***** power 25
+      Throughput: 125723191.200000 reads/sec
+      max resident set size: 5491376 kb
+**** strings
+***** power 19
+      Throughput: 30999565.400000 reads/sec
+      max resident set size: 411760 kb
+***** power 22
+      Throughput: 26227732.500000 reads/sec
+      max resident set size: 3237456 kb
+***** power 25
+      Throughput: 20680739.600000 reads/sec
+      max resident set size: 25842176 kb
 *** inserts
-**** integers (--power 25)
+**** integers
+***** power 19
+      Throughput: 6580700.946962 inserts/sec
+      max resident set size: 93360 kb
+***** power 22
+      Throughput: 7089425.763995 inserts/sec
+      max resident set size: 692992 kb
+***** power 25
      Throughput: 6995666.246295 inserts/sec
      max resident set size: 11782576 kb
-**** strings (--power 22)
+**** strings
+***** power 19
+      Throughput: 6109750.097113 inserts/sec
+      max resident set size: 411392 kb
+***** power 22
      Throughput: 6381935.850358 inserts/sec
      max resident set size: 4023568 kb
-**** strings (--power 25)
+***** power 25
      Throughput: 6405496.526597 inserts/sec
      max resident set size: 32133552 kb
+** stl
+*** reads
+**** integers
+***** power 19
+      Throughput: 80160049.400000 reads/sec
+      max resident set size: 89856 kb
+***** power 22
+      Throughput: 32263146.500000 reads/sec
+      max resident set size: 679104 kb
+***** power 25
+      Throughput: 21617853.500000 reads/sec
+      max resident set size: 5358096 kb
+**** strings
+***** power 19
+      Throughput: 3209768.200000 reads/sec
+      max resident set size: 422416 kb
+***** power 22
+      Throughput: 2308356.900000 reads/sec
+      max resident set size: 3340160 kb
+***** power 25
+      Throughput: 1771226.700000 reads/sec
+      max resident set size: 26644672 kb
+*** inserts
+**** integers
+***** power 19
+     Throughput: 8111166.500499 inserts/sec
+     max resident set size: 89856 kb
+***** power 22
+     Throughput: 4787804.955386 inserts/sec
+     max resident set size: 679104 kb
+***** power 25
+     Throughput: 4939661.000315 inserts/sec
+     max resident set size: 5358096 kb
+**** strings
+***** power 19
+     Throughput: 2118134.766195 inserts/sec
+     max resident set size: 422416 kb
+***** power 22
+     Throughput: 1688062.781055 inserts/sec
+     max resident set size: 3340144 kb
+***** power 25
+     Throughput: 1747392.219030 inserts/sec
+     max resident set size: 26644672 kb

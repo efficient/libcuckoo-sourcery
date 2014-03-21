@@ -103,7 +103,6 @@ public:
 
 template <class T>
 void InsertThroughputTest(InsertEnvironment<T> *env) {
-    using KType = typename T::key_type;
     std::vector<std::thread> threads;
     size_t keys_per_thread = env->numkeys * ((end_load-begin_load) / 100.0) / thread_num;
     timeval t1, t2;
