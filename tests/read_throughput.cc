@@ -48,15 +48,17 @@ size_t seed = 0;
 size_t test_len = 10;
 // Whether to use strings as the key
 const bool use_strings = false;
-// Whether to use TBB
-const bool use_tbb = false;
+// Which table type to use
+const table_type tt = LIBCUCKOO;
 
 template <class T>
 class ReadEnvironment {
     using KType = typename T::key_type;
 public:
     // We allocate the vectors with 2^power keys.
-    ReadEnvironment() : numkeys(1U<<power), table(numkeys), keys(numkeys) {
+    ReadEnvironment() : numkeys(1U<<power), table(initializer<T>::construct(numkeys)), keys(numkeys) {
+        // Some table types need extra initialization
+        initializer<T>::initialize(table, numkeys);
         // Sets up the random number generator
         if (seed == 0) {
             seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -155,13 +157,7 @@ int main(int argc, char** argv) {
                 args, arg_vars, arg_help, sizeof(args)/sizeof(const char*),
                 flags, flag_vars, flag_help, sizeof(flags)/sizeof(const char*));
 
-    using Table = typename std::conditional<use_tbb,
-                                            typename std::conditional<use_strings,
-                                                                      typename tbb::concurrent_hash_map<KeyType2, ValType>,
-                                                                      typename tbb::concurrent_hash_map<KeyType, ValType>>::type,
-                                            typename std::conditional<use_strings,
-                                                                      cuckoohash_map<KeyType2, ValType>,
-                                                                      cuckoohash_map<KeyType, ValType>>::type>::type;
+    using Table = TABLE_SELECT(tt);
     auto *env = new ReadEnvironment<Table>;
     ReadThroughputTest(env);
     delete env;

@@ -10,6 +10,7 @@
 #include <mutex>
 #include <libcuckoo/cuckoohash_map.hh>
 #include <tbb/concurrent_hash_map.h>
+#include <unordered_map>
 
 std::mutex print_lock;
 typedef std::lock_guard<std::mutex> mutex_guard;
@@ -141,6 +142,33 @@ std::string generateKey<std::string>(size_t i) {
     return ret;
 }
 
+/* Specialization functions for table initialization. The constructor
+ * function returns the correct constructor parameters given the
+ * expected number of keys. The initialization function does extra
+ * initialization for certain table types. */
+template <class T>
+struct initializer {
+    static constexpr size_t construct(const size_t numkeys) {
+        return numkeys;
+    }
+    static void initialize(T& table, const size_t numkeys) {
+    }
+};
+
+// Since unordered_map takes a number of buckets as the constructor
+// parameter, which is hard to give a good number for, we run reserve
+// after construction.
+template <class KType, class VType>
+struct initializer<std::unordered_map<KType, VType>> {
+    static constexpr size_t construct(const size_t numkeys) {
+        return 0;
+    }
+    static void initialize(std::unordered_map<KType, VType>& table, const size_t numkeys) {
+        table.reserve(numkeys);
+    }
+};
+
+
 /* A specialization that runs inserts for different table types over a
  * range of keys. */
 template <class T>
@@ -171,6 +199,19 @@ struct inserter<tbb::concurrent_hash_map<KType, VType>> {
         }
     }
 };
+
+template <class KType, class VType>
+struct inserter<std::unordered_map<KType, VType>> {
+    static void fn(std::unordered_map<KType, VType>& table,
+                   typename std::vector<KType>::iterator begin,
+                   typename std::vector<KType>::iterator end) {
+        for (;begin != end; begin++) {
+            bool ret = table.emplace(*begin, 0).second;
+            ASSERT_TRUE(ret);
+        }
+    }
+};
+
 
 /* cacheint is a cache-aligned integer type. */
 struct cacheint {
@@ -229,5 +270,49 @@ struct reader<tbb::concurrent_hash_map<KType, VType>> {
         }
     }
 };
+
+template <class KType, class VType>
+struct reader<std::unordered_map<KType, VType>> {
+    static void fn(std::unordered_map<KType, VType>& table,
+                   typename std::vector<KType>::iterator begin,
+                   typename std::vector<KType>::iterator end,
+                   cacheint& reads,
+                   bool in_table,
+                   std::atomic<bool>& finished) {
+        auto table_end = table.end();
+        while (!finished.load(std::memory_order_acquire)) {
+            for (auto it = begin; it != end; it++) {
+                ASSERT_EQ((table.find(*it) != table_end), in_table);
+                reads.num++;
+                if (finished.load(std::memory_order_acquire)) {
+                    return;
+                }
+            }
+        }
+    }
+};
+
+// Table selection logic
+typedef enum {
+    LIBCUCKOO, TBB, STL
+} table_type;
+
+#define TABLE_SELECT(tt)                                                                                                          \
+    typename std::conditional<tt == TBB,                                                                                          \
+                              typename std::conditional<use_strings,                                                              \
+                                                        typename tbb::concurrent_hash_map<KeyType2, ValType>,                     \
+                                                        typename tbb::concurrent_hash_map<KeyType, ValType>                       \
+                                                        >::type,                                                                  \
+                              typename std::conditional<tt == LIBCUCKOO,                                                          \
+                                                        typename std::conditional<use_strings,                                    \
+                                                                                  cuckoohash_map<KeyType2, ValType>,              \
+                                                                                  cuckoohash_map<KeyType, ValType>                \
+                                                                                  >::type,                                        \
+                                                        typename std::conditional<use_strings,                                    \
+                                                                                  typename std::unordered_map<KeyType2, ValType>, \
+                                                                                  typename std::unordered_map<KeyType, ValType>   \
+                                                                                  >::type                                         \
+                                                        >::type                                                                   \
+                              >::type                                                                                             \
 
 #endif
