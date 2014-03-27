@@ -1,6 +1,6 @@
 * command
   /usr/bin/time -f "max resident set size: %M kb" [program]
-* xia-router2
+* xia-router2 -- Two NUMA clusters
 ** libcuckoo
 *** reads
 **** Low memory (table sized to numkeys keys)
@@ -141,3 +141,133 @@
 ***** power 25
      Throughput: 1747392.219030 inserts/sec
      max resident set size: 26644672 kb
+* xia-router2 -- One NUMA cluster
+* command
+  /usr/bin/time -f "max resident set size: %M kb" taskset -c 0,2,4,6,8,10,12,14 [program] --thread-num 8
+** libcuckoo
+*** reads
+**** integers
+***** power 19
+Throughput: 124617433.600000 reads/sec
+max resident set size: 43072 kb
+***** power 22
+Throughput: 86179321.700000 reads/sec
+max resident set size: 237360 kb
+***** power 25
+Throughput: 72090457.100000 reads/sec
+max resident set size: 1843008 kb
+**** strings
+***** power 19
+Throughput: 32025257.800000 reads/sec
+max resident set size: 348256 kb
+***** power 22
+Throughput: 23732781.700000 reads/sec
+max resident set size: 2728016 kb
+***** power 25
+Throughput: 19515793.700000 reads/sec
+max resident set size: 21766224 kb
+*** inserts
+**** integers
+***** power 19
+Throughput: 62447856.008470 inserts/sec
+max resident set size: 42848 kb
+***** power 22
+Throughput: 48704255.154440 inserts/sec
+max resident set size: 237312 kb
+***** power 25
+**** strings
+***** power 19
+Throughput: 23252155.915833 inserts/sec
+max resident set size: 348240 kb
+***** power 22
+Throughput: 18745577.879965 inserts/sec
+max resident set size: 2728016 kb
+***** power 25
+Throughput: 15841159.234185 inserts/sec
+max resident set size: 21766224 kb
+** tbb
+*** reads
+**** integers
+***** power 19
+Throughput: 127333400.200000 reads/sec
+max resident set size: 93216 kb
+***** power 22
+Throughput: 80973278.200000 reads/sec
+max resident set size: 693232 kb
+***** power 25
+Throughput: 80563032.400000 reads/sec
+max resident set size: 692976 kb
+**** strings
+***** power 19
+Throughput: 17541453.200000 reads/sec
+max resident set size: 411296 kb
+***** power 22
+Throughput: 14686191.400000 reads/sec
+max resident set size: 3236896 kb
+***** power 25
+Throughput: 11671132.900000 reads/sec
+max resident set size: 25841824 kb
+*** inserts
+**** integers
+***** power 19
+Throughput: 17121666.243332 inserts/sec
+max resident set size: 93104 kb
+***** power 22
+Throughput: 17377225.165837 inserts/sec
+max resident set size: 692864 kb
+***** power 25
+Throughput: 17540192.205155 inserts/sec
+max resident set size: 5490736 kb
+**** strings
+***** power 19
+Throughput: 13869958.847737 inserts/sec
+max resident set size: 411312 kb
+***** power 22
+Throughput: 12472566.032499 inserts/sec
+max resident set size: 3236816 kb
+***** power 25
+Throughput: 11105956.597050 inserts/sec
+max resident set size: 25841808 kb
+** stl
+*** reads
+**** integers
+***** power 19
+Throughput: 77595424.400000 reads/sec
+max resident set size: 89856 kb
+***** power 22
+Throughput: 46389168.800000 reads/sec
+max resident set size: 679088 kb
+***** power 25
+Throughput: 31483141.900000 reads/sec
+max resident set size: 5358096 kb
+**** strings
+***** power 19
+Throughput: 2365636.700000 reads/sec
+max resident set size: 410688 kb
+***** power 22
+Throughput: 1904723.400000 reads/sec
+max resident set size: 3236448 kb
+***** power 25
+Throughput: 1500002.100000 reads/sec
+max resident set size: 25841472 kb
+*** inserts
+**** integers
+***** power 19
+Throughput: 7448562.723958 inserts/sec
+max resident set size: 89872 kb
+***** power 22
+Throughput: 5971586.945276 inserts/sec
+max resident set size: 679104 kb
+***** power 25
+Throughput: 5161396.994291 inserts/sec
+max resident set size: 5358112 kb
+**** strings
+***** power 19
+Throughput: 2692383.185836 inserts/sec
+max resident set size: 422416 kb
+***** power 22
+Throughput: 2260795.587258 inserts/sec
+max resident set size: 3339584 kb
+***** power 25
+Throughput: 1870358.043119 inserts/sec
+max resident set size: 26644240 kb
