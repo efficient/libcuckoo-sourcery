@@ -336,13 +336,12 @@ struct reader_inserter<cuckoohash_map<KType, VType>> {
 
 template <class KType, class VType>
 struct reader_inserter<tbb::concurrent_hash_map<KType, VType>> {
-    static void fn(cuckoohash_map<KType, VType>& table,
+    static void fn(tbb::concurrent_hash_map<KType, VType>& table,
                    typename std::vector<KType>::iterator begin,
                    typename std::vector<KType>::iterator end,
                    const double insert_prob,
                    const size_t start_seed,
                    std::atomic<size_t>& total_ops) {
-        VType v;
         std::mt19937_64 gen(start_seed);
         std::uniform_real_distribution<double> dist(0.0, 1.0);
         auto inserter_it = begin;
@@ -356,6 +355,7 @@ struct reader_inserter<tbb::concurrent_hash_map<KType, VType>> {
                 ASSERT_TRUE(table.insert(a, *inserter_it));
                 a->second = 0;
                 inserter_it++;
+                a.release();
             } else {
                 // Do a read
                 ASSERT_EQ(table.find(aconst, *reader_it), (reader_it < inserter_it));
@@ -363,6 +363,7 @@ struct reader_inserter<tbb::concurrent_hash_map<KType, VType>> {
                 if (reader_it == end) {
                     reader_it = begin;
                 }
+                aconst.release();
             }
             ops++;
         }
@@ -372,13 +373,12 @@ struct reader_inserter<tbb::concurrent_hash_map<KType, VType>> {
 
 template <class KType, class VType>
 struct reader_inserter<std::unordered_map<KType, VType>> {
-    static void fn(cuckoohash_map<KType, VType>& table,
+    static void fn(std::unordered_map<KType, VType>& table,
                    typename std::vector<KType>::iterator begin,
                    typename std::vector<KType>::iterator end,
                    const double insert_prob,
                    const size_t start_seed,
                    std::atomic<size_t>& total_ops) {
-        VType v;
         std::mt19937_64 gen(start_seed);
         std::uniform_real_distribution<double> dist(0.0, 1.0);
         auto inserter_it = begin;
