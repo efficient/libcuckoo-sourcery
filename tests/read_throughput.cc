@@ -38,8 +38,8 @@ size_t power = 25;
 // command line flag --thread-num
 size_t thread_num = sysconf(_SC_NPROCESSORS_ONLN);
 // The load factor to fill the table up to before testing throughput.
-// This can be set with the --load flag
-size_t load = 90;
+// This can be set with the --begin-load flag
+size_t begin_load = 90;
 // The seed which the random number generator uses. This can be set
 // with the command line flag --seed
 size_t seed = 0;
@@ -52,57 +52,7 @@ const bool use_strings = false;
 const table_type tt = LIBCUCKOO;
 
 template <class T>
-class ReadEnvironment {
-    using KType = typename T::key_type;
-public:
-    // We allocate the vectors with 2^power keys.
-    ReadEnvironment() : numkeys(1U<<power), table(initializer<T>::construct(numkeys)), keys(numkeys) {
-        // Some table types need extra initialization
-        initializer<T>::initialize(table, numkeys);
-        // Sets up the random number generator
-        if (seed == 0) {
-            seed = std::chrono::system_clock::now().time_since_epoch().count();
-        }
-        std::cout << "seed = " << seed << std::endl;
-        gen.seed(seed);
-
-        // We fill the keys array with integers between numkeys and
-        // 2*numkeys, shuffled randomly
-        keys[0] = numkeys;
-        for (size_t i = 1; i < numkeys; i++) {
-            const size_t swapind = gen() % i;
-            keys[i] = keys[swapind];
-            keys[swapind] = generateKey<KType>(i+numkeys);
-        }
-
-        // We prefill the table to load with thread_num
-        // threads, giving each thread enough keys to insert
-        std::vector<std::thread> threads;
-        size_t keys_per_thread = numkeys * (load / 100.0) / thread_num;
-        for (size_t i = 0; i < thread_num; i++) {
-            threads.emplace_back(inserter<T>::fn, std::ref(table),
-                                 keys.begin()+i*keys_per_thread,
-                                 keys.begin()+(i+1)*keys_per_thread);
-        }
-        for (size_t i = 0; i < threads.size(); i++) {
-            threads[i].join();
-        }
-
-        init_size = table.size();
-        ASSERT_TRUE(init_size == keys_per_thread * thread_num);
-
-        std::cout << "Table with capacity " << numkeys << " prefilled to a load factor of " << load << "%" << std::endl;
-    }
-
-    size_t numkeys;
-    T table;
-    std::vector<KType> keys;
-    std::mt19937_64 gen;
-    size_t init_size;
-};
-
-template <class T>
-void ReadThroughputTest(ReadEnvironment<T> *env) {
+void ReadThroughputTest(BenchmarkEnvironment<T> *env) {
     std::vector<std::thread> threads;
     std::vector<cacheint> counters(thread_num);
     // We use the first half of the threads to read the init_size
@@ -143,8 +93,8 @@ void ReadThroughputTest(ReadEnvironment<T> *env) {
 }
 
 int main(int argc, char** argv) {
-    const char* args[] = {"--power", "--thread-num", "--load", "--time", "--seed"};
-    size_t* arg_vars[] = {&power, &thread_num, &load, &test_len, &seed};
+    const char* args[] = {"--power", "--thread-num", "--begin-load", "--time", "--seed"};
+    size_t* arg_vars[] = {&power, &thread_num, &begin_load, &test_len, &seed};
     const char* arg_help[] = {"The number of keys to size the table with, expressed as a power of 2",
                               "The number of threads to spawn for each type of operation",
                               "The load factor to fill the table up to before testing reads",
@@ -158,7 +108,7 @@ int main(int argc, char** argv) {
                 flags, flag_vars, flag_help, sizeof(flags)/sizeof(const char*));
 
     using Table = TABLE_SELECT(tt);
-    auto *env = new ReadEnvironment<Table>;
+    auto *env = new BenchmarkEnvironment<Table>(power, thread_num, begin_load,seed);
     ReadThroughputTest(env);
     delete env;
 }

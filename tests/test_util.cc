@@ -4,10 +4,12 @@
 // Utilities for running tests
 #include <array>
 #include <cerrno>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <mutex>
+#include <random>
 #include <libcuckoo/cuckoohash_map.hh>
 #include <tbb/concurrent_hash_map.h>
 #include <unordered_map>
@@ -193,8 +195,7 @@ struct inserter<tbb::concurrent_hash_map<KType, VType>> {
                    typename std::vector<KType>::iterator end) {
         typename tbb::concurrent_hash_map<KType, VType>::accessor a;
         for (;begin != end; begin++) {
-            bool ret = table.insert(a, *begin);
-            ASSERT_TRUE(ret);
+            ASSERT_TRUE(table.insert(a, *begin));
             a->second = 0;
         }
     }
@@ -206,8 +207,7 @@ struct inserter<std::unordered_map<KType, VType>> {
                    typename std::vector<KType>::iterator begin,
                    typename std::vector<KType>::iterator end) {
         for (;begin != end; begin++) {
-            bool ret = table.emplace(*begin, 0).second;
-            ASSERT_TRUE(ret);
+            ASSERT_TRUE(table.emplace(*begin, 0).second);
         }
     }
 };
@@ -290,6 +290,173 @@ struct reader<std::unordered_map<KType, VType>> {
             }
         }
     }
+};
+
+/* A specialized class that does a mixture of reads and inserts for
+ * different table types. With a certain probability, it inserts the
+ * keys in the given range. The rest of the operations are reads on
+ * items in the range. It figures out which keys are in the table or
+ * not based on where the inserter is. */
+template <class T>
+struct reader_inserter {
+};
+
+template <class KType, class VType>
+struct reader_inserter<cuckoohash_map<KType, VType>> {
+    static void fn(cuckoohash_map<KType, VType>& table,
+                   typename std::vector<KType>::iterator begin,
+                   typename std::vector<KType>::iterator end,
+                   const double insert_prob,
+                   const size_t start_seed,
+                   std::atomic<size_t>& total_ops) {
+        VType v;
+        std::mt19937_64 gen(start_seed);
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
+        auto inserter_it = begin;
+        auto reader_it = begin;
+        size_t ops = 0;
+        while (inserter_it != end) {
+            if (dist(gen) < insert_prob) {
+                // Do an insert
+                ASSERT_TRUE(table.insert(*inserter_it, 0));
+                inserter_it++;
+            } else {
+                // Do a read
+                ASSERT_EQ(table.find(*reader_it, v), (reader_it < inserter_it));
+                reader_it++;
+                if (reader_it == end) {
+                    reader_it = begin;
+                }
+            }
+            ops++;
+        }
+        total_ops.fetch_add(ops);
+    }
+};
+
+template <class KType, class VType>
+struct reader_inserter<tbb::concurrent_hash_map<KType, VType>> {
+    static void fn(cuckoohash_map<KType, VType>& table,
+                   typename std::vector<KType>::iterator begin,
+                   typename std::vector<KType>::iterator end,
+                   const double insert_prob,
+                   const size_t start_seed,
+                   std::atomic<size_t>& total_ops) {
+        VType v;
+        std::mt19937_64 gen(start_seed);
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
+        auto inserter_it = begin;
+        auto reader_it = begin;
+        size_t ops = 0;
+        typename tbb::concurrent_hash_map<KType, VType>::accessor a;
+        typename tbb::concurrent_hash_map<KType, VType>::const_accessor aconst;
+        while (inserter_it != end) {
+            if (dist(gen) < insert_prob) {
+                // Do an insert
+                ASSERT_TRUE(table.insert(a, *inserter_it));
+                a->second = 0;
+                inserter_it++;
+            } else {
+                // Do a read
+                ASSERT_EQ(table.find(aconst, *reader_it), (reader_it < inserter_it));
+                reader_it++;
+                if (reader_it == end) {
+                    reader_it = begin;
+                }
+            }
+            ops++;
+        }
+        total_ops.fetch_add(ops);
+    }
+};
+
+template <class KType, class VType>
+struct reader_inserter<std::unordered_map<KType, VType>> {
+    static void fn(cuckoohash_map<KType, VType>& table,
+                   typename std::vector<KType>::iterator begin,
+                   typename std::vector<KType>::iterator end,
+                   const double insert_prob,
+                   const size_t start_seed,
+                   std::atomic<size_t>& total_ops) {
+        VType v;
+        std::mt19937_64 gen(start_seed);
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
+        auto inserter_it = begin;
+        auto reader_it = begin;
+        size_t ops = 0;
+        auto table_end = table.end();
+        while (inserter_it != end) {
+            if (dist(gen) < insert_prob) {
+                // Do an insert
+                ASSERT_TRUE(table.emplace(*inserter_it, 0).second);
+                inserter_it++;
+            } else {
+                // Do a read
+                ASSERT_EQ(table.find(*reader_it) != table_end, (reader_it < inserter_it));
+                reader_it++;
+                if (reader_it == end) {
+                    reader_it = begin;
+                }
+            }
+            ops++;
+        }
+        total_ops.fetch_add(ops);
+    }
+};
+
+
+// BenchmarkEnvironment class, which is the same for all benchmarks
+template <class T>
+class BenchmarkEnvironment {
+    using KType = typename T::key_type;
+public:
+    BenchmarkEnvironment(const size_t power, const size_t thread_num,
+                         const size_t begin_load, size_t& seed) : 
+        numkeys(1U << power), table(initializer<T>::construct(numkeys)),
+        keys(numkeys) {
+        // Some table types need extra initialization
+        initializer<T>::initialize(table, numkeys);
+        // Sets up the random number generator
+        if (seed == 0) {
+            seed = std::chrono::system_clock::now().time_since_epoch().count();
+        }
+        std::cout << "seed = " << seed << std::endl;
+        gen.seed(seed);
+
+        // We fill the keys array with integers between numkeys and
+        // 2*numkeys, shuffled randomly
+        keys[0] = numkeys;
+        for (size_t i = 1; i < numkeys; i++) {
+            const size_t swapind = gen() % i;
+            keys[i] = keys[swapind];
+            keys[swapind] = generateKey<KType>(i+numkeys);
+        }
+
+        // We prefill the table to begin_load with thread_num threads,
+        // giving each thread enough keys to insert
+        std::vector<std::thread> threads;
+        size_t keys_per_thread = numkeys * (begin_load / 100.0) / thread_num;
+        for (size_t i = 0; i < thread_num; i++) {
+            threads.emplace_back(inserter<T>::fn, std::ref(table),
+                                 keys.begin()+i*keys_per_thread,
+                                 keys.begin()+(i+1)*keys_per_thread);
+        }
+        for (size_t i = 0; i < threads.size(); i++) {
+            threads[i].join();
+        }
+
+        init_size = table.size();
+        ASSERT_TRUE(init_size == keys_per_thread * thread_num);
+
+        std::cout << "Table with capacity " << numkeys <<
+            " prefilled to a load factor of " << begin_load << "%" << std::endl;
+    }
+
+    size_t numkeys;
+    T table;
+    std::vector<KType> keys;
+    std::mt19937_64 gen;
+    size_t init_size;
 };
 
 // Table selection logic
