@@ -1,4 +1,0 @@
-* x-label for inserts and reads = "Table size (power of 2)"
-* x-label for mixed = "Percentage insert"
-* y-label for throughput = "Throughput (millions of reqs per sec)"
-* y-label for memory = "Memory used (mb)"

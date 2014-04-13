@@ -41,3 +41,7 @@ tests/*.out
 tests/*.trs
 tests/.deps/
 tests/.libs/
+benchmarks/writeup.*
+!benchmarks/writeup.tex
+*.pdf
+.DS_STORE
