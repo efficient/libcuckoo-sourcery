@@ -42,12 +42,12 @@ AS_IF([test "$has_tbb" = yes],
 AC_DEFINE_UNQUOTED([USE_TBB], [$use_tbb_val], [Whether -ltbb and its header file were found])
 
 # Checks for Google dense_hash. If it's there, tests will include it.
-AC_CHECK_HEADER([google/dense_hash_map.h], [has_dense_hash=yes], [])
+AC_CHECK_HEADER([sparsehash/dense_hash_map], [has_dense_hash=yes], [])
 use_dense_hash_val=0
 AS_IF([test "$has_dense_hash" = yes],
             [use_dense_hash_val=1],
             [])
-AC_DEFINE_UNQUOTED([USE_DENSE_HASH], [$use_dense_hash_val], [Whether google/dense_hash_map.h was found])
+AC_DEFINE_UNQUOTED([USE_DENSE_HASH], [$use_dense_hash_val], [Whether sparsehash/dense_hash_map.h was found])
 
 AC_LANG_POP([C++])
 

@@ -9,9 +9,26 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <sys/time.h>
 
 #include "benchmark_util.cc"
 
+// The number of keys to size the table with, expressed as a power of
+// 2. This can be set with the command line flag --power
+size_t power = 25;
+// The number of threads spawned for inserts. This can be set with the
+// command line flag --thread-num
+size_t thread_num = sysconf(_SC_NPROCESSORS_ONLN);
+// The load factor to fill the table up to before testing throughput.
+// This can be set with the command line flag --begin-load.
+size_t begin_load = 0;
+// The maximum load factor to fill the table up to when testing
+// throughput. This can be set with the command line flag
+// --end-load.
+size_t end_load = 90;
+// The seed which the random number generator uses. This can be set
+// with the command line flag --seed
+size_t seed = 0;
 // Whether to use strings as the key
 const bool use_strings = false;
 // Which table type to use
