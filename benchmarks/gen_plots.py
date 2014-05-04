@@ -21,9 +21,9 @@ LABELS = {
 }
 
 PLOT_HEIGHT = 3.5
-PLOT_WIDTH = 3
+PLOT_WIDTH = 4.0
 DPI = 80
-FONTSIZE = 11
+FONTSIZE = 14
 
 def gen_plot(optype, numatype='two_numa'):
     """Using the data from JSON_FILE, gen_plot will return a matplotlib
@@ -67,5 +67,5 @@ for optype in OPS:
     print 'Generating ' + optype
     f = gen_plot(optype)
     filename = optype + '_plot.pdf'
-    f.savefig(filename)
+    f.savefig(filename, bbox_inches='tight')
     print 'Wrote to ' + filename

@@ -5,47 +5,13 @@
 #  include "config.h"
 #endif
 
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <chrono>
+#include <functional>
 #include <iostream>
-#include <limits>
-#include <memory>
-#include <mutex>
-#include <numeric>
-#include <random>
-#include <stdint.h>
-#include <sys/time.h>
 #include <thread>
-#include <type_traits>
-#include <unistd.h>
-#include <utility>
 #include <vector>
 
-#include <libcuckoo/cuckoohash_map.hh>
-#include <tbb/concurrent_hash_map.h>
-#include "test_util.cc"
+#include "benchmark_util.cc"
 
-typedef uint32_t KeyType;
-typedef std::string KeyType2;
-typedef uint32_t ValType;
-
-// The number of keys to size the table with, expressed as a power of
-// 2. This can be set with the command line flag --power
-size_t power = 25;
-// The number of threads spawned for inserts. This can be set with the
-// command line flag --thread-num
-size_t thread_num = sysconf(_SC_NPROCESSORS_ONLN);
-// The load factor to fill the table up to before testing throughput.
-// This can be set with the --begin-load flag
-size_t begin_load = 90;
-// The seed which the random number generator uses. This can be set
-// with the command line flag --seed
-size_t seed = 0;
-// How many seconds to run the test for. This can be set with the
-// command line flag --time
-size_t test_len = 10;
 // Whether to use strings as the key
 const bool use_strings = false;
 // Which table type to use
@@ -107,7 +73,8 @@ int main(int argc, char** argv) {
                 args, arg_vars, arg_help, sizeof(args)/sizeof(const char*),
                 flags, flag_vars, flag_help, sizeof(flags)/sizeof(const char*));
 
-    using Table = TABLE_SELECT(tt);
+    CHECK_PARAMS(tt, thread_num);
+    using Table = TABLE_SELECT(tt, use_strings);
     auto *env = new BenchmarkEnvironment<Table>(power, thread_num, begin_load,seed);
     ReadThroughputTest(env);
     delete env;

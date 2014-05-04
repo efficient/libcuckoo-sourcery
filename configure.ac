@@ -27,6 +27,28 @@ AC_LANG_PUSH([C++])
 AX_CHECK_COMPILE_FLAG([-std=c++0x], [CXXFLAGS="$CXXFLAGS -std=c++0x"])
 AX_CHECK_COMPILE_FLAG([-stdlib=libc++], [CXXFLAGS="$CXXFLAGS -stdlib=libc++"])
 AX_CHECK_COMPILE_FLAG([-Wall], [CXXFLAGS="$CXXFLAGS -Wall"])
+
+# Checks for TBB. If it's there, tests will include and link with
+# Intel TBB
+AC_CHECK_LIB([tbb], [TBB_runtime_interface_version], [has_tbb=yes], [])
+AC_CHECK_HEADER([tbb/tbb.h], [has_tbb_h=yes], [])
+use_tbb_val=0
+AS_IF([test "$has_tbb" = yes],
+            AS_IF([test "$has_tbb_h" = yes],
+                        AC_SUBST([TBB_LIBS], -ltbb)
+                        use_tbb_val=1,
+                        []),
+            [])
+AC_DEFINE_UNQUOTED([USE_TBB], [$use_tbb_val], [Whether -ltbb and its header file were found])
+
+# Checks for Google dense_hash. If it's there, tests will include it.
+AC_CHECK_HEADER([google/dense_hash_map.h], [has_dense_hash=yes], [])
+use_dense_hash_val=0
+AS_IF([test "$has_dense_hash" = yes],
+            [use_dense_hash_val=1],
+            [])
+AC_DEFINE_UNQUOTED([USE_DENSE_HASH], [$use_dense_hash_val], [Whether google/dense_hash_map.h was found])
+
 AC_LANG_POP([C++])
 
 # Checks for programs.
