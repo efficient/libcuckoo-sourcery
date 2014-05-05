@@ -1,4 +1,4 @@
-* xia-router2 -- Two NUMA clusters
+* xia-router2 -- Two NUMA
 ** command
    /usr/bin/time -f "max resident set size: %M kb" [program]
 ** libcuckoo
@@ -249,6 +249,160 @@
 ***** strings
       Throughput: 1831998.667782 ops/sec
       max resident set size: 26644656 kb
+
+** dense_hash
+*** reads
+**** integers
+***** power 19
+      Throughput: 169797685.900000 reads/sec
+      max resident set size: 62592 kb
+***** power 22
+      Throughput: 62567210.000000 reads/sec
+      max resident set size: 463456 kb
+***** power 25
+      Throughput: 41202328.800000 reads/sec
+      max resident set size: 3675648 kb
+**** strings
+***** power 19
+      Throughput: 2402528.900000 reads/sec
+      max resident set size: 414752 kb
+***** power 22
+      Throughput: 1848077.200000 reads/sec
+      max resident set size: 3281776 kb
+***** power 25
+      Throughput: 1292125.400000 reads/sec
+      max resident set size: 26220064 kb
+*** inserts
+**** integers
+***** power 19
+      Throughput: 24325136.612022 inserts/sec
+      max resident set size: 62592 kb
+***** power 22
+      Throughput: 17009832.239110 inserts/sec
+      max resident set size: 463472 kb
+***** power 25
+      Throughput: 15416015.632976 inserts/sec
+      max resident set size: 3674592 kb
+**** strings
+***** power 19
+      Throughput: 974498.509935 inserts/sec
+      max resident set size: 414768 kb
+***** power 22
+      Throughput: 1056263.967987 inserts/sec
+      max resident set size: 3282048 kb
+***** power 25
+      Throughput: 915682.828010 inserts/sec
+      max resident set size: 26219088 kb
+*** mixed (--power 25)
+**** (--insert-percent 10)
+***** integers
+      Throughput: 19460836.193820 ops/sec
+      max resident set size: 3674656 kb
+***** strings
+      Throughput: 1696855.857861 ops/sec
+      max resident set size: 26219136 kb
+**** (--insert-percent 30)
+***** integers
+      Throughput: 16247830.910357 ops/sec
+      max resident set size: 3675920 kb
+***** strings
+      Throughput: 1436250.727092 ops/sec
+      max resident set size: 26219136 kb
+**** (--insert-percent 50)
+***** integers
+      Throughput: 16140183.636392 ops/sec
+      max resident set size: 3675392 kb
+***** strings
+      Throughput: 1174249.730807 ops/sec
+      max resident set size: 26220080 kb
+**** (--insert-percent 70)
+***** integers
+      Throughput: 13336677.855606 ops/sec
+      max resident set size: 3674608 kb
+***** strings
+      Throughput: 822533.586263 ops/sec
+      max resident set size: 26220096 kb
+**** (--insert-percent 90)
+***** integers
+      Throughput: 11917498.611255 ops/sec
+      max resident set size: 3675904 kb
+***** strings
+      Throughput: 954914.931909 ops/sec
+      max resident set size: 26219136 kb
+
+* xia-router2 -- Two NUMA clusters, single threaded mixed benchmark
+** libcuckoo
+*** (--insert-percent 10)
+**** integers
+     Throughput: 6825646.603006 ops/sec
+     max resident set size: 1842784 kb
+**** strings
+     Throughput: 2339732.468084 ops/sec
+     max resident set size: 21766000 kb
+*** (--insert-percent 30)
+**** integers
+     Throughput: 6298345.884342 ops/sec
+     max resident set size: 1842000 kb
+**** strings
+     Throughput: 2373236.361213 ops/sec
+     max resident set size: 21766000 kb
+*** (--insert-percent 50)
+**** integers
+     Throughput: 7049317.027444 ops/sec
+     max resident set size: 1841984 kb
+**** strings
+     Throughput: 2764116.715035 ops/sec
+     max resident set size: 21765984 kb
+*** (--insert-percent 70)
+**** integers
+     Throughput: 5435697.871759 ops/sec
+     max resident set size: 1841984 kb
+**** strings
+     Throughput: 2078836.368107 ops/sec
+     max resident set size: 21765984 kb
+*** (--insert-percent 90)
+**** integers
+     Throughput: 4947941.317689 ops/sec
+     max resident set size: 1841984 kb
+**** strings
+     Throughput: 2094447.535673 ops/sec
+     max resident set size: 21766000 kb
+** tbb
+*** (--insert-percent 10)
+**** integers
+     Throughput: 6476763.555480 ops/sec
+     max resident set size: 5490384 kb
+**** strings
+     Throughput: 1745451.146068 ops/sec
+     max resident set size: 25841552 kb
+*** (--insert-percent 30)
+**** integers
+     Throughput: 4582454.843207 ops/sec
+     max resident set size: 5490560 kb
+**** strings
+     Throughput: 1241486.670474 ops/sec
+     max resident set size: 25841568 kb
+*** (--insert-percent 50)
+**** integers
+     Throughput: 6920280.696641 ops/sec
+     max resident set size: 5490544 kb
+**** strings
+     Throughput: 1919581.152112 ops/sec
+     max resident set size: 25841568 kb
+*** (--insert-percent 70)
+**** integers
+     Throughput: 4934010.805307 ops/sec
+     max resident set size: 5490560 kb
+**** strings
+     Throughput: 1461720.391254 ops/sec
+     max resident set size: 25841568 kb
+*** (--insert-percent 90)
+**** integers
+     Throughput: 3635652.067074 ops/sec
+     max resident set size: 5490384 kb
+**** strings
+     Throughput: 1427450.792717 ops/sec
+     max resident set size: 25841568 kb
 * xia-router2 -- One NUMA cluster
 ** command
    /usr/bin/time -f "max resident set size: %M kb" taskset -c 0,2,4,6,8,10,12,14 [program] --thread-num 8
@@ -298,39 +452,39 @@
 *** mixed (--power 25)
 **** (--insert-percent 10)
 ***** integers
-Throughput: 55618467.270432 ops/sec
-max resident set size: 1842976 kb
+      Throughput: 55618467.270432 ops/sec
+      max resident set size: 1842976 kb
 ***** strings
-Throughput: 18831175.332440 ops/sec
-max resident set size: 21766256 kb
+      Throughput: 18831175.332440 ops/sec
+      max resident set size: 21766256 kb
 **** (--insert-percent 30)
 ***** integers
-Throughput: 48021483.111724 ops/sec
-max resident set size: 1842976 kb
+      Throughput: 48021483.111724 ops/sec
+      max resident set size: 1842976 kb
 ***** strings
-Throughput: 18061419.020555 ops/sec
-max resident set size: 21766256 kb
+      Throughput: 18061419.020555 ops/sec
+      max resident set size: 21766256 kb
 **** (--insert-percent 50)
 ***** integers
-Throughput: 51750887.340720 ops/sec
-max resident set size: 1842976 kb
+      Throughput: 51750887.340720 ops/sec
+      max resident set size: 1842976 kb
 ***** strings
-Throughput: 17161135.505794 ops/sec
-max resident set size: 21766240 kb
+      Throughput: 17161135.505794 ops/sec
+      max resident set size: 21766240 kb
 **** (--insert-percent 70)
 ***** integers
-Throughput: 40767514.093863 ops/sec
-max resident set size: 1842928 kb
+      Throughput: 40767514.093863 ops/sec
+      max resident set size: 1842928 kb
 ***** strings
-Throughput: 16538860.320151 ops/sec
-max resident set size: 21766256 kb
+      Throughput: 16538860.320151 ops/sec
+      max resident set size: 21766256 kb
 **** (--insert-percent 90)
 ***** integers
-Throughput: 37519046.761765 ops/sec
-max resident set size: 1842976 kb
+      Throughput: 37519046.761765 ops/sec
+      max resident set size: 1842976 kb
 ***** strings
-Throughput: 15656710.234030 ops/sec
-max resident set size: 21766272 kb
+      Throughput: 15656710.234030 ops/sec
+      max resident set size: 21766272 kb
 ** tbb
 *** reads
 **** integers
@@ -377,39 +531,39 @@ max resident set size: 21766272 kb
 *** mixed (--power 25)
 **** (--insert-percent 10)
 ***** integers
-Throughput: 49302672.593100 ops/sec
-max resident set size: 5490800 kb
+      Throughput: 49302672.593100 ops/sec
+      max resident set size: 5490800 kb
 ***** strings
-Throughput: 13385487.793515 ops/sec
-max resident set size: 25841856 kb
+      Throughput: 13385487.793515 ops/sec
+      max resident set size: 25841856 kb
 **** (--insert-percent 30)
 ***** integers
-Throughput: 39873315.394844 ops/sec
-max resident set size: 5490784 kb
+      Throughput: 39873315.394844 ops/sec
+      max resident set size: 5490784 kb
 ***** strings
-Throughput: 12359608.914389 ops/sec
-max resident set size: 25841760 kb
+      Throughput: 12359608.914389 ops/sec
+      max resident set size: 25841760 kb
 **** (--insert-percent 50)
 ***** integers
-Throughput: 32923427.236932 ops/sec
-max resident set size: 5490832 kb
+      Throughput: 32923427.236932 ops/sec
+      max resident set size: 5490832 kb
 ***** strings
-Throughput: 12550047.434880 ops/sec
-max resident set size: 25841856 kb
+      Throughput: 12550047.434880 ops/sec
+      max resident set size: 25841856 kb
 **** (--insert-percent 70)
 ***** integers
-Throughput: 23510039.589369 ops/sec
-max resident set size: 5490816 kb
+      Throughput: 23510039.589369 ops/sec
+      max resident set size: 5490816 kb
 ***** strings
-Throughput: 10707467.691358 ops/sec
-max resident set size: 25841872 kb
+      Throughput: 10707467.691358 ops/sec
+      max resident set size: 25841872 kb
 **** (--insert-percent 90)
 ***** integers
-Throughput: 18938201.039089 ops/sec
-max resident set size: 5491008 kb
+      Throughput: 18938201.039089 ops/sec
+      max resident set size: 5491008 kb
 ***** strings
-Throughput: 10111775.749941 ops/sec
-max resident set size: 25841856 kb
+      Throughput: 10111775.749941 ops/sec
+      max resident set size: 25841856 kb
 ** stl
 *** reads
 **** integers

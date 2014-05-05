@@ -315,7 +315,7 @@ struct reader_inserter<tbb::concurrent_hash_map<KType, VType>> {
 };
 #endif
 
-#if DENSE_HASH_MAP == 1
+#if USE_DENSE_HASH == 1
 template <class KType, class VType>
 struct reader_inserter<google::dense_hash_map<KType, VType>> {
     static void fn(google::dense_hash_map<KType, VType>& table,
@@ -329,7 +329,6 @@ struct reader_inserter<google::dense_hash_map<KType, VType>> {
         auto inserter_it = begin;
         auto reader_it = begin;
         size_t ops = 0;
-        auto table_end = table.end();
         while (inserter_it != end) {
             if (dist(gen) < insert_prob) {
                 // Do an insert
@@ -337,7 +336,7 @@ struct reader_inserter<google::dense_hash_map<KType, VType>> {
                 inserter_it++;
             } else {
                 // Do a read
-                ASSERT_EQ(table.find(*reader_it) != table_end, (reader_it < inserter_it));
+                ASSERT_EQ(table.find(*reader_it) != table.end(), (reader_it < inserter_it));
                 reader_it++;
                 if (reader_it == end) {
                     reader_it = begin;
@@ -363,7 +362,6 @@ struct reader_inserter<std::unordered_map<KType, VType>> {
         auto inserter_it = begin;
         auto reader_it = begin;
         size_t ops = 0;
-        auto table_end = table.end();
         while (inserter_it != end) {
             if (dist(gen) < insert_prob) {
                 // Do an insert
@@ -371,7 +369,7 @@ struct reader_inserter<std::unordered_map<KType, VType>> {
                 inserter_it++;
             } else {
                 // Do a read
-                ASSERT_EQ(table.find(*reader_it) != table_end, (reader_it < inserter_it));
+                ASSERT_EQ(table.find(*reader_it) != table.end(), (reader_it < inserter_it));
                 reader_it++;
                 if (reader_it == end) {
                     reader_it = begin;
