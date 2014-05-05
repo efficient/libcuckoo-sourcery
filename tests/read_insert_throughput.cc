@@ -18,7 +18,7 @@
 size_t power = 25;
 // The number of threads spawned for inserts. This can be set with the
 // command line flag --thread-num
-size_t thread_num = sysconf(_SC_NPROCESSORS_ONLN);
+const size_t thread_num = 8;
 // The load factor to fill the table up to before testing throughput.
 // This can be set with the command line flag --begin-load.
 size_t begin_load = 0;
@@ -39,7 +39,7 @@ const bool use_strings = false;
 const table_type tt = LIBCUCKOO;
 
 template <class T>
-void ReadInsertThroughputTest(BenchmarkEnvironment<T> *env) {
+void ReadInsertThroughputTest(BenchmarkEnvironment<T, thread_num> *env) {
     const size_t start_seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::atomic<size_t> total_ops(0);
     std::vector<std::thread> threads;
@@ -47,7 +47,7 @@ void ReadInsertThroughputTest(BenchmarkEnvironment<T> *env) {
     timeval t1, t2;
     gettimeofday(&t1, NULL);
     for (size_t i = 0; i < thread_num; i++) {
-        threads.emplace_back(reader_inserter<T>::fn, std::ref(env->table),
+        threads.emplace_back(reader_inserter<T, thread_num>::fn, std::ref(env->table),
                              env->keys.begin()+(i*keys_per_thread)+env->init_size,
                              env->keys.begin()+((i+1)*keys_per_thread)+env->init_size,
                              (double)insert_percent / 100.0, start_seed + i, std::ref(total_ops));
@@ -67,10 +67,9 @@ void ReadInsertThroughputTest(BenchmarkEnvironment<T> *env) {
 }
 
 int main(int argc, char** argv) {
-    const char* args[] = {"--power", "--thread-num", "--begin-load", "--end-load", "--seed", "--insert-percent"};
-    size_t* arg_vars[] = {&power, &thread_num, &begin_load, &end_load, &seed, &insert_percent};
+    const char* args[] = {"--power", "--begin-load", "--end-load", "--seed", "--insert-percent"};
+    size_t* arg_vars[] = {&power, &begin_load, &end_load, &seed, &insert_percent};
     const char* arg_help[] = {"The number of keys to size the table with, expressed as a power of 2",
-                              "The number of threads to spawn for each type of operation",
                               "The load factor to fill the table up to before testing throughput",
                               "The maximum load factor to fill the table up to when testing throughput",
                               "The seed used by the random number generator",
@@ -95,7 +94,7 @@ int main(int argc, char** argv) {
 
     CHECK_PARAMS(tt, thread_num);
     using Table = TABLE_SELECT(tt, use_strings);
-    auto *env = new BenchmarkEnvironment<Table>(power, thread_num, begin_load,seed);
+    auto *env = new BenchmarkEnvironment<Table, thread_num>(power, begin_load,seed);
     ReadInsertThroughputTest(env);
     delete env;
 }

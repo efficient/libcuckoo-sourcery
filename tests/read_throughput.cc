@@ -18,7 +18,7 @@
 size_t power = 25;
 // The number of threads spawned for inserts. This can be set with the
 // command line flag --thread-num
-size_t thread_num = sysconf(_SC_NPROCESSORS_ONLN);
+const size_t thread_num = 8;
 // The load factor to fill the table up to before testing throughput.
 // This can be set with the --begin-load flag
 size_t begin_load = 90;
@@ -34,9 +34,9 @@ const bool use_strings = false;
 const table_type tt = LIBCUCKOO;
 
 template <class T>
-void ReadThroughputTest(BenchmarkEnvironment<T> *env) {
+void ReadThroughputTest(BenchmarkEnvironment<T, thread_num> *env) {
     std::vector<std::thread> threads;
-    std::vector<cacheint> counters(thread_num);
+    std::atomic<size_t> total_reads(0);
     // We use the first half of the threads to read the init_size
     // elements that are in the table and the other half to read the
     // numkeys-init_size elements that aren't in the table.
@@ -47,38 +47,34 @@ void ReadThroughputTest(BenchmarkEnvironment<T> *env) {
     // When set to true, it signals to the threads to stop running
     std::atomic<bool> finished(false);
     for (size_t i = 0; i < first_threadnum; i++) {
-        threads.emplace_back(reader<T>::fn, std::ref(env->table),
+        threads.emplace_back(reader<T, thread_num>::fn, std::ref(env->table),
                              env->keys.begin() + (i*in_keys_per_thread),
                              env->keys.begin() + ((i+1)*in_keys_per_thread),
-                             std::ref(counters[i]), true, std::ref(finished));
+                             std::ref(total_reads), true, std::ref(finished));
     }
     for (size_t i = 0; i < second_threadnum; i++) {
-        threads.emplace_back(reader<T>::fn, std::ref(env->table),
+        threads.emplace_back(reader<T, thread_num>::fn, std::ref(env->table),
                              env->keys.begin() + (i*out_keys_per_thread) + env->init_size,
                              env->keys.begin() + (i+1)*out_keys_per_thread + env->init_size,
-                             std::ref(counters[first_threadnum+i]), false, std::ref(finished));
+                             std::ref(total_reads), false, std::ref(finished));
     }
     sleep(test_len);
     finished.store(true, std::memory_order_release);
     for (size_t i = 0; i < threads.size(); i++) {
         threads[i].join();
     }
-    size_t total_reads = 0;
-    for (size_t i = 0; i < counters.size(); i++) {
-        total_reads += counters[i].num;
-    }
+
     // Reports the results
     std::cout << "----------Results----------" << std::endl;
-    std::cout << "Number of reads:\t" << total_reads << std::endl;
+    std::cout << "Number of reads:\t" << total_reads.load() << std::endl;
     std::cout << "Time elapsed:\t" << test_len << " seconds" << std::endl;
-    std::cout << "Throughput: " << std::fixed << total_reads / (double)test_len << " reads/sec" << std::endl;
+    std::cout << "Throughput: " << std::fixed << total_reads.load() / (double)test_len << " reads/sec" << std::endl;
 }
 
 int main(int argc, char** argv) {
-    const char* args[] = {"--power", "--thread-num", "--begin-load", "--time", "--seed"};
-    size_t* arg_vars[] = {&power, &thread_num, &begin_load, &test_len, &seed};
+    const char* args[] = {"--power", "--begin-load", "--time", "--seed"};
+    size_t* arg_vars[] = {&power, &begin_load, &test_len, &seed};
     const char* arg_help[] = {"The number of keys to size the table with, expressed as a power of 2",
-                              "The number of threads to spawn for each type of operation",
                               "The load factor to fill the table up to before testing reads",
                               "The number of seconds to run the test for",
                               "The seed used by the random number generator"};
@@ -91,7 +87,7 @@ int main(int argc, char** argv) {
 
     CHECK_PARAMS(tt, thread_num);
     using Table = TABLE_SELECT(tt, use_strings);
-    auto *env = new BenchmarkEnvironment<Table>(power, thread_num, begin_load,seed);
+    auto *env = new BenchmarkEnvironment<Table, thread_num>(power, begin_load,seed);
     ReadThroughputTest(env);
     delete env;
 }
