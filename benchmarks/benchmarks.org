@@ -45,16 +45,25 @@
 ****** integers
        Throughput: 10217292.231052 ops/sec
        max resident set size: 1842864 kb
+****** strings
+       Throughput: 4234603.288593 ops/sec
+       max resident set size: 21766016 kb
 *** 4 threads
 ***** (--insert-percent 50)
 ****** integers
        Throughput: 20623418.694931 ops/sec
        max resident set size: 1842816 kb
+****** strings
+       Throughput: 7142942.647815 ops/sec
+       max resident set size: 21766128 kb
 *** 8 threads
 ***** (--insert-percent 50)
 ****** integers
        Throughput: 39731702.905462 ops/sec
        max resident set size: 1842912 kb
+****** strings
+       Throughput: 15382773.077247 ops/sec
+       max resident set size: 21766208 kb
 *** 16 threads
 **** reads
 ***** Low memory (table sized to numkeys keys)
@@ -191,16 +200,25 @@
 ****** integers
        Throughput: 9501322.489335 ops/sec
        max resident set size: 5490400 kb
+****** strings
+       Throughput: 3046540.744832 ops/sec
+       max resident set size: 25841632 kb
 *** 4 threads
 ***** (--insert-percent 50)
 ****** integers
        Throughput: 14535036.610334 ops/sec
        max resident set size: 5490464 kb
+****** strings
+       Throughput: 6093717.015122 ops/sec
+       max resident set size: 25841360 kb
 *** 8 threads
 ***** (--insert-percent 50)
 ****** integers
        Throughput: 25857670.758052 ops/sec
        max resident set size: 5490848 kb
+****** strings
+       Throughput: 11034013.031305 ops/sec
+       max resident set size: 25841920 kb
 *** 16 threads
 **** reads
 ***** integers
@@ -366,18 +384,27 @@
 **** mixed (--power 25)
 ***** (--insert-percent 50)
 ****** integers
-Throughput: 4842079.688006 ops/sec
-max resident set size: 5358064 kb
+       Throughput: 4842079.688006 ops/sec
+       max resident set size: 5358064 kb
+****** strings
+       Throughput: 1694011.256897 ops/sec
+       max resident set size: 26644624 kb
 *** 4 threads
 ***** (--insert-percent 50)
 ****** integers
-Throughput: 1849923.409683 ops/sec
-max resident set size: 5358080 kb
+       Throughput: 1849923.409683 ops/sec
+       max resident set size: 5358080 kb
+****** strings
+       Throughput: 1122625.268857 ops/sec
+       max resident set size: 26644752 kb
 *** 8 threads
 ***** (--insert-percent 50)
 ****** integers
-Throughput: 1309979.466869 ops/sec
-max resident set size: 5358432 kb
+       Throughput: 1309979.466869 ops/sec
+       max resident set size: 5358432 kb
+****** strings
+       Throughput: 929491.841720 ops/sec
+       max resident set size: 26644800 kb
 *** 16 threads
 **** mixed (--power 25)
 ***** (--insert-percent 10)
@@ -392,6 +419,9 @@ max resident set size: 5358432 kb
 ****** integers
        Throughput: 792609.245258 ops/sec
        max resident set size: 5358704 kb
+****** strings
+       Throughput: 501925.849481 ops/sec
+       max resident set size: 26644832 kb
 ***** (--insert-percent 70)
 ****** integers
        Throughput: 763488.122684 ops/sec
@@ -487,16 +517,25 @@ max resident set size: 5358432 kb
 ****** integers
        Throughput: 11538230.565195 ops/sec
        max resident set size: 3675408 kb
+****** strings
+       Throughput: 1091180.710253 ops/sec
+       max resident set size: 26220416 kb
 *** 4 threads
 ***** (--insert-percent 50)
 ****** integers
        Throughput: 4207967.660880 ops/sec
        max resident set size: 3675280 kb
+****** strings
+       Throughput: 623168.980692 ops/sec
+       max resident set size: 26221712 kb
 *** 8 threads
 ***** (--insert-percent 50)
 ****** integers
        Throughput: 2125451.046919 ops/sec
        max resident set size: 3677040 kb
+****** strings
+       Throughput: 630202.938095 ops/sec
+       max resident set size: 26222160 kb
 *** 16 threads
 **** mixed (--power 25)
 ***** (--insert-percent 10)
@@ -511,6 +550,9 @@ max resident set size: 5358432 kb
 ****** integers
        Throughput: 1045997.297461 ops/sec
        max resident set size: 3677008 kb
+****** strings
+       Throughput: 421942.563085 ops/sec
+       max resident set size: 26223152 kb
 ***** (--insert-percent 70)
 ****** integers
        Throughput: 1001386.532532 ops/sec

@@ -13,24 +13,47 @@
 \date{\today}
 
 \newcommand{\myfigwidth}{0.9\textwidth}
+\newcommand{\tbbmap}{\texttt{concurrent\textunderscore hash\textunderscore map}}
+\newcommand{\densehash}{\texttt{dense\textunderscore hash}}
+\newcommand{\unorderedmap}{\texttt{unordered\textunderscore map}}
 
 \begin{document}
 
 \maketitle
 
+\section{Outline}
 In this benchmark, we compare libcuckoo, our high-performance
 concurrent hash table, with the Intel Thread Building Blocks
-{concurrent\textunderscore hash\textunderscore map}, a popular
-concurrent hash table, and the STL {unordered\textunderscore map}, a
-single-threaded hash table. In each benchmark, we look at each
-hashtable's throughput with integer keys and string keys. The machine
-we ran the benchmarks on has 16 CPU's split into two NUMA clusters and
-64GB memory. It ran Ubuntu 12.04, and the benchmarks were compiled
-with \texttt{g++-4.8}. We ran the benchmarks with all 16 CPU's, except
-for STL, which we had to run on only one core since it is a
-single-threaded hash table. In all the benchmarks, libcuckoo and TBB
-significantly outperformed STL as expected, so we focus on comparing
-libcuckoo and TBB.
+{\tbbmap}, a popular concurrent hash table, and Google {\densehash}
+and the STL {\unorderedmap}, two popular single-threaded hash tables.
+While single-threaded hash tables may be performant in a single-core
+execution environment, once systems requires safe concurrent access to
+a hash table, performance degrades rapidly, as each call to a
+single-threaded table must be protected by a lock. To illustrate the
+benefits of specially-designed concurrent hash tables, we first
+present in Figure~\ref{fig:mixed-threads} a comparison of the four
+tables on a mixed workload of 50\% reads and inserts, examining how
+they scale across multiple cores. While the single-threaded tables
+perform slightly better on 1 and 2 threads, performance quickly
+degrades, and by 8 threads, libcuckoo and TBB significantly outperform
+STL and {\densehash}.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\myfigwidth]{mixed_50_inserts_plot}
+  \caption{Mixed throughput scaling across cores}
+  \label{fig:mixed-threads}
+\end{figure}
+
+In each of the subsequent benchmarks, we look at each hashtable's
+throughput with integer keys and string keys. The machine we ran the
+benchmarks on has 16 CPU's split into two NUMA clusters and 64GB
+memory. It ran Ubuntu 12.04, and the benchmarks were compiled with
+\texttt{g++-4.8}. We ran the benchmarks with all 16 CPU's, except for
+{\densehash} and STL, which we ran on only one core since they are
+single-threaded. In all the benchmarks, libcuckoo and TBB
+significantly outperformed {\densehash} and STL in nearly every case,
+so we focus on comparing libcuckoo and TBB.
 
 \section{Inserts}
 \label{sec:inserts}
@@ -38,11 +61,11 @@ libcuckoo and TBB.
 Our insert benchmark measures the time taken to fill up a table from
 0\% to 90\% of its allocated capacity. Figure~\ref{fig:inserts} shows
 the insert throughput of the three tables with integer and string
-keys. libcuckoo significantly outperforms TBB and STL on both integers
-and strings, producing about 85\% and 71\% more throughput on integers
-and strings, respectively. We suspected that TBB's low performance was
-due to the fact that it doesn't deal well with multiple NUMA clusters.
-On one NUMA cluster (8 CPU's), TBB does significantly better, but
+keys. libcuckoo significantly outperforms TBB on both integers and
+strings, producing about 85\% and 71\% more throughput on integers and
+strings, respectively. We suspected that TBB's low performance was due
+to the fact that it doesn't deal well with multiple NUMA clusters. On
+one NUMA cluster (8 CPU's), TBB does significantly better, but
 libcuckoo still outperforms it by about 55\% and 31\% on integers and
 strings, respectively.
 
@@ -63,7 +86,9 @@ executed over 10 seconds. Figure~\ref{fig:reads} shows the read
 throughput of the three tables with integer and string keys. For
 integer reads, libcuckoo and TBB were fairly close, but TBB ended up
 outperforming libcuckoo by about 15\% for the largest table size. For
-strings, libcuckoo did better, outperforming TBB by about 34\%.
+strings, libcuckoo did better, outperforming TBB by about 34\%. On the
+smallest table size, {\densehash} performed the best, but its
+performance sharply degraded with larger tables.
 
 \begin{figure}
   \centering
@@ -114,15 +139,14 @@ difference between libcuckoo and TBB.
 \label{sec:conclusion}
 
 libcuckoo has a number of features that cause it to perform better
-than TBB and STL in a majority of cases. libcuckoo stores data in a
-cache-optimized form and avoids false sharing between CPU's, which
-allow it to scale very well to a large number of CPU's while still
-using very little extra memory. Additionally, libcuckoo implements
-partial-key hashing to reduce the comparison time for expensive data
-types like strings. While TBB does do a better job on a pure read
-workload of integers on a large table, we believe that for most use
-cases, libcuckoo is a better choice than both TBB's
-{concurrent\textunderscore hash\textunderscore map} and the STL
-{unordered\textunderscore map}.
+than TBB, {\densehash}, and STL in a majority of cases. libcuckoo
+stores data in a cache-optimized form and avoids false sharing between
+CPU's, which allow it to scale very well to a large number of CPU's
+while still using very little extra memory. Additionally, libcuckoo
+implements partial-key hashing to reduce the comparison time for
+expensive data types like strings. While TBB does do a better job on a
+pure read workload of integers on a large table, we believe that for
+most use cases, libcuckoo is a better choice than TBB's {\tbbmap},
+Google's {\densehash}, or the STL {\unorderedmap}.
 
 \end{document}

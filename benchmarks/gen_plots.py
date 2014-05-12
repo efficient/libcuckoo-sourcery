@@ -7,8 +7,8 @@ JSON_FILE = 'json_data.json'
 data = json.loads(open(JSON_FILE).read())
 
 KEYS = ['integer', 'string']
-OPS = ['reads', 'inserts', 'mixed', 'memory']
-TABLES = ['libcuckoo', 'tbb', 'stl']
+OPS = ['reads', 'inserts', 'mixed', 'memory', 'mixed 50 inserts']
+TABLES = ['libcuckoo', 'tbb', 'dense_hash', 'stl']
 LABELS = {
     'inserts': {'x': "Table size (power of 2)",
                 'y': "Throughput\n(millions of reqs per sec)"},
@@ -17,11 +17,13 @@ LABELS = {
     'mixed': {'x': "Percentage insert",
               'y': "Throughput\n(millions of reqs per sec)"},
     'memory': {'x': "Table size (power of 2)",
-               'y': "Memory used (mb)"}
+               'y': "Memory used (mb)"},
+    'mixed 50 inserts': {'x': "Number of cores",
+                         'y': "Throughput\n(millions of reqs per sec)"}
 }
 
 PLOT_HEIGHT = 3.5
-PLOT_WIDTH = 4.0
+PLOT_WIDTH = 4.5
 DPI = 80
 FONTSIZE = 14
 
@@ -66,6 +68,6 @@ def gen_plot(optype, numatype='two_numa'):
 for optype in OPS:
     print 'Generating ' + optype
     f = gen_plot(optype)
-    filename = optype + '_plot.pdf'
+    filename = (optype + '_plot.pdf').replace(' ', '_')
     f.savefig(filename, bbox_inches='tight')
     print 'Wrote to ' + filename
