@@ -2,17 +2,18 @@
 #define _CUCKOOHASH_CONFIG_H
 #include <stdint.h>
 
-typedef uint32_t KeyType;
-typedef uint32_t ValType;
+typedef uint64_t KeyType;
+typedef uint64_t ValType;
 typedef uint32_t VersionType;
 
-#define  counter_size  ((VersionType)1 << (16))
+#define  counter_size  ((VersionType)1 << (13))
 #define  counter_mask  (counter_size - 1)
 
 /*
  * number of slots per bucket
  */
 #define bucketsize 8
+typedef uint8_t BitType;
 
 /*
  * The maximum number of cuckoo operations per insert,

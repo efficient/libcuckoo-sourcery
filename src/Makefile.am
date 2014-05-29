@@ -1,4 +1,4 @@
-noinst_PROGRAMS = test_cuckoo test_cuckoo_mt bench_cuckoo bench_cuckoo_w_mr bench_cuckoo_rw
+noinst_PROGRAMS = test_cuckoo test_cuckoo_mt bench_cuckoo bench_cuckoo_w_mr bench_cuckoo_rw bench_cuckoo_read bench_cuckoo_mix
 
 # change glibc_dir to the folder where glibc with TSX lock elision is installed
 #glibc_dir = /home/xiaozhou/Research/build/glibc
@@ -34,5 +34,15 @@ bench_cuckoo_rw_LDFLAGS = $(ldFlags)
 bench_cuckoo_rw_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
 bench_cuckoo_rw_LDADD = $(glibc_ld)
 
-AM_CFLAGS = -Wall
+bench_cuckoo_read_SOURCES = bench_cuckoo_read.cc
+bench_cuckoo_read_LDFLAGS = $(ldFlags)
+bench_cuckoo_read_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
+bench_cuckoo_read_LDADD = $(glibc_ld)
+
+bench_cuckoo_mix_SOURCES = bench_cuckoo_mix.cc
+bench_cuckoo_mix_LDFLAGS = $(ldFlags)
+bench_cuckoo_mix_DEPENDENCIES = $(top_srcdir)/lib/libcuckoo.la
+bench_cuckoo_mix_LDADD = $(glibc_ld)
+
+AM_CFLAGS = -Wall -O4
 AM_CPPFLAGS = -std=c++0x -I../lib -I$(top_srcdir)/lib
