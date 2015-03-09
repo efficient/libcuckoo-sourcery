@@ -38,7 +38,7 @@ size_t power = 23;
 size_t thread_num = sysconf(_SC_NPROCESSORS_ONLN);
 // The load factor to fill the table up to before testing throughput.
 // This can be set with the --load flag
-size_t load = 50;
+size_t load = 90;
 // The seed which the random number generator uses. This can be set
 // with the command line flag --seed
 size_t seed = 0;
@@ -80,7 +80,7 @@ void read_thread(thread_args rt_args) {
             if (finished.load(std::memory_order_acquire)) {
                 return;
             }
-            ASSERT_EQ(table.find(*begin, v), in_table);
+            ASSERT_EQ(table.find(*it, v), in_table);
             reads->num++;
         }
     }
